@@ -13,10 +13,16 @@ declare global {
 }
 
 // --- Configuration ---
-// IMPORTANT: Replace with your actual deployed contract address and ABI
-const GEMINI_API_KEY =  "AIzaSyDXExWHkiAeuBGqmXCSPU6CkFPNaAZUREA";
-const CONTRACT_ADDRESS = "0xd9145CCE52D386f254917e481eB44e9943F39138";
+// SECURE: Load variables from .env.local file
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+const CONTRACT_ADDRESS = import.meta.env.VITE_CONTRACT_ADDRESS;
 
+// Polygon Amoy Testnet Configuration (Recommended for easy faucet access)
+const REQUIRED_CHAIN_ID = '0x13882'; // 80002 in hex
+const REQUIRED_NETWORK_NAME = 'Polygon Amoy Testnet';
+
+// The ABI should be updated if you change your smart contract's functions or events.
+// This ABI matches the final InvoiceRegistry.sol contract.
 const CONTRACT_ABI:any = [
 	{
 		"anonymous": false,
@@ -111,7 +117,7 @@ const CONTRACT_ABI:any = [
 		"stateMutability": "view",
 		"type": "function"
 	}
-];
+]
 
 // --- Type Definitions ---
 interface InvoiceData {
@@ -123,7 +129,6 @@ interface InvoiceData {
   total_amount: number;
 }
 
-// Represents the different stages of the application workflow
 type AppState = 'IDLE' | 'EXTRACTING' | 'PREVIEW' | 'SECURING' | 'SUCCESS' | 'ERROR';
 
 // --- AI & File Helpers ---
@@ -138,12 +143,76 @@ async function fileToGenerativePart(file: File) {
   return { inlineData: { data: await base64EncodedDataPromise, mimeType: file.type } };
 }
 
-// New helper to generate a hash directly from a File object
 async function generateFileHash(file: File): Promise<string> {
     const buffer = await file.arrayBuffer();
     const hash = ethers.sha256(new Uint8Array(buffer));
     return hash;
 }
+
+/**
+ * Checks if the user is on the correct blockchain network and prompts them to switch if not.
+ */
+async function checkAndSwitchNetwork(): Promise<boolean> {
+    if (!window.ethereum) return false;
+    try {
+        const currentChainId = await window.ethereum.request({ method: 'eth_chainId' });
+        if (currentChainId !== REQUIRED_CHAIN_ID) {
+            await window.ethereum.request({
+                method: 'wallet_switchEthereumChain',
+                params: [{ chainId: REQUIRED_CHAIN_ID }],
+            });
+        }
+        return true;
+    } catch (switchError: any) {
+        if (switchError.code === 4902) {
+            try {
+                // This will add the network if the user doesn't have it.
+                // It is configured for Polygon Amoy but can be changed for any EVM network.
+                await window.ethereum.request({
+                    method: 'wallet_addEthereumChain',
+                    params: [
+                        {
+                            chainId: REQUIRED_CHAIN_ID,
+                            chainName: REQUIRED_NETWORK_NAME,
+                            rpcUrls: ['https://rpc-amoy.polygon.technology/'],
+                            nativeCurrency: { name: 'MATIC', symbol: 'MATIC', decimals: 18 },
+                            blockExplorerUrls: ['https://www.oklink.com/amoy'],
+                        },
+                    ],
+                });
+                return true;
+            } catch (addError) {
+                console.error("Failed to add the network", addError);
+                return false;
+            }
+        }
+        console.error("Failed to switch network", switchError);
+        return false;
+    }
+}
+
+/**
+ * Parses complex ethers.js errors to find the root cause.
+ * @param {any} error - The error object from a catch block.
+ * @returns {string} - A simplified, user-friendly error message.
+ */
+function parseBlockchainError(error: any): string {
+    // For transactions reverted with a specific reason string (the best case)
+    if (error.reason) {
+        return error.reason;
+    }
+    // For transactions reverted without a reason (e.g., require(false))
+    if (error.code === 'CALL_EXCEPTION') {
+        return 'The transaction was rejected by the smart contract. This often means the invoice number already exists or another rule was broken.';
+    }
+    // For user-rejected transactions in their wallet
+    if (error.code === 'ACTION_REJECTED' || error.code === 4001) {
+        return 'Transaction was rejected in your wallet.';
+    }
+    // Fallback for other errors
+    return error.message || 'An unknown blockchain error occurred.';
+}
+
 
 export const App = () => {
   // --- State Management ---
@@ -159,19 +228,20 @@ export const App = () => {
     const file = event.target.files?.[0];
     if (file) {
       setSelectedFile(file);
-      // Reset the entire state when a new file is chosen
+      resetState(true, `${file.name} selected.`);
+    }
+  };
+
+  const resetState = (keepFile = false, message = '') => {
+      if (!keepFile) {
+        setSelectedFile(null);
+      }
       setAppState('IDLE');
       setExtractedData(null);
       setFileHash('');
       setTxHash('');
       setErrorMessage('');
-      setStatusMessage(`${file.name} selected.`);
-    }
-  };
-
-  const resetState = () => {
-      setSelectedFile(null);
-      setAppState('IDLE');
+      setStatusMessage(message);
   }
 
   // --- Workflow Step 1: Extraction ---
@@ -187,7 +257,6 @@ export const App = () => {
     setStatusMessage('Step 1/3: Hashing original document...');
     
     try {
-      // "Dual Hash" Feature: Hash the original file immediately
       const originalFileHash = await generateFileHash(selectedFile);
       setFileHash(originalFileHash);
 
@@ -195,7 +264,7 @@ export const App = () => {
       const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
       const imagePart = await fileToGenerativePart(selectedFile);
       
-      const prompt = `From the attached invoice image, extract the following fields and return ONLY a single, clean JSON object with no extra text, explanations, or markdown:
+      const prompt = `From the attached invoice image, extract the following fields and return ONLY a single, clean JSON object with no extra text, explanations, or markdown: , if a field is missing, use an empty string or zero as appropriate.
         - "invoice_number": string
         - "invoice_date": "YYYY-MM-DD"
         - "vendor_gstin": string (must be 15 characters)
@@ -208,11 +277,11 @@ export const App = () => {
       const data: InvoiceData = JSON.parse(jsonText);
 
       setExtractedData(data);
-      setAppState('PREVIEW'); // Move to the "Preview" stage
+      setAppState('PREVIEW');
       setStatusMessage('Extraction complete. Please review the details below.');
 
     } catch (err: any) {
-      console.error(err);
+      console.error("Extraction Error:", err);
       setErrorMessage(`AI Extraction Failed: ${err.message}. Please try another document.`);
       setAppState('ERROR');
     }
@@ -228,25 +297,30 @@ export const App = () => {
     
     setAppState('SECURING');
     setErrorMessage('');
-    setStatusMessage('Step 3/3: Securing fingerprints on the Polygon blockchain...');
+    setStatusMessage('Step 3/3: Preparing blockchain transaction...');
 
     try {
-      if (!window.ethereum) throw new Error("MetaMask is not installed.");
+      if (!window.ethereum) throw new Error("A web3 wallet (like Phantom or MetaMask) is not installed.");
+      
+      setStatusMessage(`Please connect to ${REQUIRED_NETWORK_NAME}...`);
+      const isNetworkCorrect = await checkAndSwitchNetwork();
+      if (!isNetworkCorrect) {
+          throw new Error(`Please switch to the ${REQUIRED_NETWORK_NAME} in your wallet.`);
+      }
 
       const provider = new ethers.BrowserProvider(window.ethereum);
       await provider.send("eth_requestAccounts", []);
       const signer = await provider.getSigner();
       const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
       
-      // "Dual Hash" Feature: Hash the extracted JSON data
       const dataToHash = JSON.stringify(extractedData, Object.keys(extractedData).sort());
       const dataHash = ethers.sha256(ethers.toUtf8Bytes(dataToHash));
 
-      setStatusMessage('Please confirm the transaction in MetaMask...');
+      setStatusMessage('Please confirm the transaction in your wallet...');
       const transaction = await contract.storeInvoice(
         extractedData.invoice_number,
-        fileHash, // Sending the original file hash
-        dataHash  // Sending the extracted data hash
+        fileHash,
+        dataHash
       );
 
       setStatusMessage('Waiting for blockchain confirmation...');
@@ -257,15 +331,9 @@ export const App = () => {
       setStatusMessage('Success! Your invoice is permanently secured.');
 
     } catch (err: any) {
-      console.error(err);
-      // Graceful Error Handling
-      if (err.code === 'ACTION_REJECTED' || err.code === 4001) {
-        setErrorMessage("Transaction was rejected in MetaMask. Please try again.");
-      } else if (err.message.includes("Invoice number already exists")) {
-        setErrorMessage("This invoice number has already been secured on the blockchain.");
-      } else {
-        setErrorMessage(`Blockchain Error: ${err.message}`);
-      }
+      console.error("Blockchain Error:", err);
+      const friendlyErrorMessage = parseBlockchainError(err);
+      setErrorMessage(`Blockchain Error: ${friendlyErrorMessage}`);
       setAppState('ERROR');
     }
   };
@@ -284,7 +352,7 @@ export const App = () => {
             <div className="flex flex-col items-center justify-center w-full">
               <label htmlFor="file-upload" className="flex flex-col items-center justify-center w-full h-32 border-2 border-slate-300 border-dashed rounded-lg cursor-pointer bg-slate-50 hover:bg-slate-100">
                 <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                    <svg className="w-8 h-8 mb-4 text-slate-500" aria-hidden="true" xmlns="http://www.w.org/2000/svg" fill="none" viewBox="0 0 20 16"><path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2"/></svg>
+                    <svg className="w-8 h-8 mb-4 text-slate-500" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 16"><path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2"/></svg>
                     <p className="mb-2 text-sm text-slate-500"><span className="font-semibold">Click to upload an invoice</span></p>
                 </div>
                 <input id="file-upload" type="file" className="hidden" onChange={handleFileChange} accept="image/*,.pdf" />
@@ -332,12 +400,12 @@ export const App = () => {
           <div className="p-4 bg-green-50 border border-green-200 rounded-lg text-center space-y-4">
             <h3 className="text-lg font-semibold text-green-800 mb-2">✅ Invoice Secured!</h3>
             <p className="text-sm text-green-700 break-words">
-              Your invoice's digital fingerprints are permanently recorded on the Polygon blockchain.
+              Your invoice's digital fingerprints are permanently recorded on the blockchain.
               <a href={`https://www.oklink.com/amoy/tx/${txHash}`} target="_blank" rel="noopener noreferrer" className="font-medium underline hover:text-green-900 block mt-2">
                 View Transaction on Polygon Explorer
               </a>
             </p>
-            <button onClick={resetState} className="w-full bg-slate-500 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg">
+            <button onClick={() => resetState()} className="w-full bg-slate-500 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg">
                 Process Another Invoice
             </button>
           </div>
@@ -347,8 +415,8 @@ export const App = () => {
         {appState === 'ERROR' && (
             <div className="text-center p-4 bg-red-50 border border-red-200 rounded-lg space-y-4">
                 <p className="text-sm font-medium text-red-700">{errorMessage}</p>
-                <button onClick={resetState} className="w-full bg-slate-500 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg">
-                    Start Over
+                <button onClick={() => resetState(true)} className="w-full bg-slate-500 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg">
+                    Try Again
                 </button>
             </div>
         )}
