@@ -65,7 +65,7 @@ export const App = () => {
       setError('Please select an invoice file first.');
       return;
     }
-    if (!GEMINI_API_KEY || GEMINI_API_KEY === "YOUR_GEMINI_API_KEY") {
+    if (!GEMINI_API_KEY) {
       setError("Error: Gemini API Key is missing.");
       return;
     }
