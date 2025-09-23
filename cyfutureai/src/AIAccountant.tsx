@@ -8,6 +8,7 @@ import { Badge } from "./components/ui/badge";
 import { Input } from "./components/ui/input";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { useSolanaAction } from "./hooks/useSolanaAction";
+import { useIpfs } from "./hooks/useIpfs";
 import graphMonthly from './assets/graph-monthly.png';
 
 import {
@@ -254,9 +255,12 @@ export const AIAccountant = () => {
   >('IDLE');
   
   const [extractedData, setExtractedData] = useState<ExtractedData | null>(null);
+
   const [fileHash, setFileHash] = useState<string>('');
   const [dataHash, setDataHash] = useState<string>('');
   const [txSignature, setTxSignature] = useState<string>('');
+  const [ipfsFileHash, setIpfsFileHash] = useState<string>('');
+  const [ipfsDataHash, setIpfsDataHash] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [toastInfo, setToastInfo] = useState<{message: string, type: 'success' | 'error' | 'info', visible: boolean}>({ 
     message: '', type: 'info', visible: false 
@@ -264,6 +268,7 @@ export const AIAccountant = () => {
   
   // Hooks
   const { sendTransaction, isSending } = useSolanaAction();
+  const { uploadFile, uploadJson, isUploading } = useIpfs();
   
   // Show toast message
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
@@ -298,12 +303,22 @@ export const AIAccountant = () => {
     if (!file) return;
     
     setAppState('EXTRACTING');
+
     
     try {
       // Read file and generate hash
       const fileBuffer = await file.arrayBuffer();
       const hash = await generateHash(new Uint8Array(fileBuffer));
       setFileHash(hash);
+      
+      // Upload file to IPFS
+      showToast("Uploading file to IPFS...", 'info');
+      const ipfsHash = await uploadFile(file);
+      if (!ipfsHash) {
+        throw new Error("Failed to upload file to IPFS");
+      }
+      setIpfsFileHash(ipfsHash);
+      showToast(`File uploaded to IPFS: ${ipfsHash.slice(0, 10)}...`, 'success');
       
       // Extract details using AI
       await handleExtractDetails(file);
@@ -320,7 +335,7 @@ export const AIAccountant = () => {
     try {
       // Generate AI model
       const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
-      const model = genAI.getGenerativeModel({ model: "gemini-pro-vision" });
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
       
       // Prepare the image for model input
       const imageParts = [await fileToGenerativePart(file)];
@@ -356,6 +371,15 @@ export const AIAccountant = () => {
       // Cast to BufferSource to fix TypeScript error
       const hash = await generateHash(dataBuffer as BufferSource);
       
+      // Upload extracted data to IPFS
+      showToast("Uploading extracted data to IPFS...", 'info');
+      const ipfsDataHash = await uploadJson(data);
+      if (!ipfsDataHash) {
+        throw new Error("Failed to upload extracted data to IPFS");
+      }
+      setIpfsDataHash(ipfsDataHash);
+      showToast(`Data uploaded to IPFS: ${ipfsDataHash.slice(0, 10)}...`, 'success');
+      
       // Update state with extracted data
       setExtractedData(data);
       setDataHash(hash);
@@ -377,6 +401,8 @@ export const AIAccountant = () => {
       const dataStr = JSON.stringify({
         fileHash,
         dataHash,
+        ipfsFileHash,
+        ipfsDataHash,
         invoiceNumber: extractedData?.invoice_number,  
         date: new Date().toISOString()
       });
@@ -483,7 +509,7 @@ export const AIAccountant = () => {
                     {(appState === 'IDLE' || appState === 'ERROR') && (
                       <FileDrop 
                         onFileSelect={handleFileSelect}
-                        isProcessing={isSending || appState === 'EXTRACTING' as any}
+                        isProcessing={isSending || isUploading || appState === 'EXTRACTING' as any}
                         appState={appState}
                       />
                     )}
@@ -531,7 +557,7 @@ export const AIAccountant = () => {
                           <Button 
                             className="w-full mt-5"
                             onClick={handleSecureOnBlockchain}
-                            disabled={isSending}
+                            disabled={isSending || isUploading}
                           >
                             <Wallet className="h-4 w-4 mr-2" />
                             Secure on Blockchain
@@ -618,6 +644,49 @@ export const AIAccountant = () => {
                               <FileDown className="h-3 w-3 ml-1" />
                             </a>
                           </p>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* IPFS Information */}
+                    <div className="mt-4 space-y-3">
+                      <h4 className="text-sm font-medium text-slate-700">IPFS Storage Details</h4>
+                      
+                      <div className="rounded-md bg-blue-50 p-3 border border-blue-100">
+                        <div className="flex items-start gap-2">
+                          <FileText className="h-4 w-4 text-blue-600 mt-0.5" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-blue-900">Original File</p>
+                            <p className="text-xs text-blue-700 font-mono break-all">
+                              <a 
+                                href={`https://gateway.pinata.cloud/ipfs/${ipfsFileHash}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="hover:underline"
+                              >
+                                {ipfsFileHash}
+                              </a>
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="rounded-md bg-purple-50 p-3 border border-purple-100">
+                        <div className="flex items-start gap-2">
+                          <Bot className="h-4 w-4 text-purple-600 mt-0.5" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-purple-900">Extracted Data</p>
+                            <p className="text-xs text-purple-700 font-mono break-all">
+                              <a 
+                                href={`https://gateway.pinata.cloud/ipfs/${ipfsDataHash}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="hover:underline"
+                              >
+                                {ipfsDataHash}
+                              </a>
+                            </p>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -734,4 +803,4 @@ export const AIAccountant = () => {
   );
 };
 
-export default AIAccountant;
+
