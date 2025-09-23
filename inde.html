@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Accountant Command Center</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <!-- Chart.js for graphs -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        .wallet-btn { background-color: #1E293B; color: white; padding: 8px 16px; border-radius: 8px; font-weight: 500; font-size: 14px; transition: background-color 0.2s; border: 1px solid transparent; }
+        .wallet-btn:hover { background-color: #334155; }
+        .nav-link { padding: 8px 16px; font-size: 14px; font-weight: 500; border-radius: 6px; transition: background-color 0.2s, color 0.2s; color: #475569; cursor: pointer; }
+        .nav-link.active { background-color: #3B82F6; color: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .nav-link:not(.active):hover { background-color: #F1F5F9; }
+        .btn-primary { background-color: #3B82F6; color: white; }
+        .btn-primary:hover:not(:disabled) { background-color: #2563EB; }
+        .btn-secondary { background-color: #FFFFFF; color: #334155; border: 1px solid #CBD5E1; }
+        .btn-secondary:hover:not(:disabled) { background-color: #F8FAFC; }
+        .btn-disabled { background-color: #94A3B8 !important; cursor: not-allowed !important; opacity: 0.7; }
+        .editable-input { background-color: #FEF3C7; border: 1px solid #FCD34D; border-radius: 6px; padding: 4px 8px; font-size: 14px; width: 100%; transition: box-shadow 0.2s; }
+        .editable-input:focus { outline: none; box-shadow: 0 0 0 2px #FBBF24; }
+        dialog::backdrop { background-color: rgba(0, 0, 0, 0.5); backdrop-filter: blur(4px); }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800">
+
+    <div id="app-shell">
+        <!-- HEADER / NAVIGATION BAR -->
+        <header class="bg-white/80 backdrop-blur-lg sticky top-0 z-50 border-b border-slate-200">
+            <nav class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between items-center h-16">
+                    <div class="flex items-center space-x-3">
+                        <div class="bg-blue-600 p-2 rounded-lg shadow-md"><i class="fa-solid fa-robot text-white fa-lg"></i></div>
+                        <h1 class="text-xl font-bold text-slate-800 hidden sm:block">AI Accountant</h1>
+                    </div>
+                    <div id="nav-links" class="hidden md:flex items-center space-x-1 bg-slate-100 p-1 rounded-lg">
+                        <a data-view="dashboard" class="nav-link active">Dashboard</a>
+                        <a data-view="processing" class="nav-link">Processing Queue</a>
+                        <a data-view="gst" class="nav-link">GST Reports</a>
+                        <a data-view="ai-command" class="nav-link">AI Command Center</a>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                         <button class="hidden sm:inline-block px-3 py-2 text-sm font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors">Get Free SOL</button>
+                         <div class="wallet-btn">Connect Wallet</div>
+                    </div>
+                </div>
+            </nav>
+        </header>
+
+        <!-- MAIN CONTENT AREA -->
+        <main class="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+
+            <!-- ======================= DASHBOARD VIEW ======================== -->
+            <div id="dashboard-view" class="space-y-8 view">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-900">Dashboard</h1>
+                    <p class="text-gray-500 mt-1">Here's a high-level overview of your financial activity.</p>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm"><div class="flex items-center justify-between"><h3 class="text-sm font-medium text-gray-500">Invoices Secured</h3><i class="fa-solid fa-file-invoice text-gray-400"></i></div><p id="kpi-secured" class="text-3xl font-bold mt-2">0</p></div>
+                    <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm"><div class="flex items-center justify-between"><h3 class="text-sm font-medium text-gray-500">Total Secured Value</h3><i class="fa-solid fa-indian-rupee-sign text-gray-400"></i></div><p id="kpi-value" class="text-3xl font-bold mt-2">0</p></div>
+                    <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm"><div class="flex items-center justify-between"><h3 class="text-sm font-medium text-gray-500">AI Alerts Flagged</h3><i class="fa-solid fa-triangle-exclamation text-gray-400"></i></div><p id="kpi-alerts" class="text-3xl font-bold mt-2">0</p></div>
+                    <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm"><div class="flex items-center justify-between"><h3 class="text-sm font-medium text-gray-500">Items in Queue</h3><i class="fa-solid fa-list-check text-gray-400"></i></div><p id="kpi-queue" class="text-3xl font-bold mt-2">0</p></div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <div class="lg:col-span-2 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                         <h3 class="font-bold text-lg mb-4">Expenses by Category (August 2025)</h3>
+                         <canvas id="dashboard-chart"></canvas>
+                    </div>
+                    <div class="lg:col-span-1 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                        <h3 class="font-bold text-lg mb-4">Recent Activity</h3>
+                        <div id="recent-activity-feed" class="space-y-4">
+                            <!-- Activity will be injected here -->
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white p-8 rounded-xl border border-slate-200 shadow-sm text-center">
+                    <div class="w-12 h-12 mx-auto bg-blue-100 rounded-full flex items-center justify-center"><i class="fa-solid fa-upload text-blue-600 fa-lg"></i></div>
+                    <h2 class="text-xl font-bold mt-4">Start a New Processing Job</h2>
+                    <p class="text-gray-500 mt-2 max-w-xl mx-auto">Upload one or more invoices (PDFs or images) to begin the automated analysis and security process.</p>
+                    <input type="file" id="file-upload-input" class="hidden" multiple accept="image/*,.pdf">
+                    <button id="upload-button" class="mt-6 btn-primary font-semibold px-6 py-3 rounded-lg shadow-sm transition-colors">Upload Invoices</button>
+                </div>
+            </div>
+
+            <!-- ======================= PROCESSING QUEUE VIEW ======================== -->
+            <div id="processing-view" class="space-y-8 view hidden">
+                <div class="flex justify-between items-center">
+                    <div><h1 class="text-3xl font-bold text-gray-900">Processing Queue</h1><p class="text-gray-500 mt-1">Manage, review, and secure your uploaded invoices.</p></div>
+                    <div class="flex space-x-3">
+                         <button id="process-queue-btn" class="btn-secondary font-semibold px-4 py-2 rounded-lg transition-colors">Process Pending</button>
+                         <button id="secure-all-btn" class="btn-primary font-semibold px-4 py-2 rounded-lg shadow-sm transition-colors">Secure Ready Files</button>
+                    </div>
+                </div>
+                <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                    <table class="w-full text-sm"><thead class="bg-slate-50"><tr><th class="px-6 py-3 text-left font-semibold text-slate-600">Filename</th><th class="px-6 py-3 text-left font-semibold text-slate-600">Status</th><th class="px-6 py-3 text-left font-semibold text-slate-600">Details</th><th class="px-6 py-3 text-left font-semibold text-slate-600">AI Flags</th><th class="px-6 py-3 text-left font-semibold text-slate-600">Action</th></tr></thead><tbody id="queue-table-body" class="divide-y divide-slate-200"></tbody></table>
+                </div>
+            </div>
+
+            <!-- ======================= AI COMMAND CENTER VIEW ======================== -->
+            <div id="ai-command-view" class="space-y-4 view hidden">
+                 <div class="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col h-[80vh]">
+                     <div class="p-4 border-b"><h2 class="text-lg font-bold">AI Command Center</h2><p class="text-sm text-slate-500">Ask questions about your processed financial data.</p></div>
+                     <div id="chat-history" class="flex-grow p-6 space-y-6 overflow-y-auto"></div>
+                     <div class="p-4 border-t bg-white rounded-b-xl">
+                        <div class="relative"><input type="text" id="chat-input" placeholder="Ask FinAI a question..." class="w-full pl-4 pr-12 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none transition-shadow"><button id="chat-submit-btn" class="absolute right-3 top-1/2 -translate-y-1/2 bg-blue-600 text-white w-8 h-8 rounded-lg flex items-center justify-center hover:bg-blue-700"><i class="fa-solid fa-paper-plane"></i></button></div>
+                     </div>
+                 </div>
+            </div>
+
+            <!-- ======================= GST REPORTS VIEW (SIMPLIFIED) ======================== -->
+            <div id="gst-view" class="space-y-8 view hidden">
+                <div class="flex justify-between items-center">
+                    <div><h1 class="text-3xl font-bold text-gray-900">GST Reconciliation Center</h1><p class="text-gray-500 mt-1">A simple, three-step process for monthly compliance.</p></div>
+                    <button class="btn-primary font-semibold px-4 py-2 rounded-lg shadow-sm transition-colors text-sm"><i class="fa-solid fa-download mr-2"></i>Export Report</button>
+                </div>
+                <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+                        <div class="text-center md:text-left"><span class="text-sm font-semibold text-blue-600 bg-blue-100 px-3 py-1 rounded-full">Step 1: Your Data</span><h3 class="font-bold text-xl mt-3">Your Purchase Register is Ready</h3><p class="text-slate-500 mt-1 text-sm">We've automatically compiled all your 'Purchase' invoices secured on the blockchain for August 2025.</p><div class="mt-4 font-semibold text-green-700"><i class="fa-solid fa-circle-check mr-2"></i>3 invoices found and loaded.</div></div>
+                        <div class="text-center md:text-left"><span class="text-sm font-semibold text-blue-600 bg-blue-100 px-3 py-1 rounded-full">Step 2: GST Portal Data</span><h3 class="font-bold text-xl mt-3">Upload GSTR-2B Report</h3><p class="text-slate-500 mt-1 text-sm">Upload the JSON file from the official GST portal to automatically compare and find mismatches.</p><button class="mt-4 w-full bg-blue-50 border-2 border-dashed border-blue-200 text-blue-700 font-semibold px-4 py-3 rounded-lg hover:bg-blue-100 transition-colors"><i class="fa-solid fa-upload mr-2"></i>Upload GSTR-2B JSON File</button></div>
+                    </div>
+                </div>
+                <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                    <span class="text-sm font-semibold text-blue-600 bg-blue-100 px-3 py-1 rounded-full">Step 3: Review & Reconcile</span>
+                    <h3 class="font-bold text-xl mt-3">Reconciliation Summary</h3>
+                    <p class="text-slate-500 mt-1 text-sm mb-6">Our AI has compared both data sources. Here is your net position and a list of mismatches that require your attention.</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div class="bg-slate-50 p-6 rounded-lg border">
+                            <h4 class="font-semibold text-slate-600">Net GST Position for August 2025</h4>
+                            <div class="mt-4"><p class="text-sm text-red-600">Total GST Payable (on Sales)</p><p class="text-2xl font-bold text-red-600">₹21,600</p></div>
+                            <div class="mt-4"><p class="text-sm text-green-600">Total ITC Available (on Purchases)</p><p class="text-2xl font-bold text-green-600">₹19,460</p></div>
+                            <hr class="my-4"/>
+                            <div class="mt-4"><p class="text-sm font-bold text-blue-800">Final Amount to Pay</p><p class="text-4xl font-extrabold text-blue-800">₹2,140</p></div>
+                        </div>
+                        <div class="space-y-4">
+                            <div class="p-4 rounded-lg border border-orange-200 bg-orange-50"><div class="flex items-start gap-3"><i class="fa-solid fa-triangle-exclamation text-orange-500 mt-1"></i><div><h5 class="font-semibold text-orange-800">Value Mismatch</h5><p class="text-sm text-orange-700 mt-1">Invoice <span class="font-mono bg-orange-100 px-1 rounded">TS-001</span> from Tech Supplies Inc. has a tax difference of ₹200.</p><button class="text-xs font-semibold text-slate-600 bg-white border border-slate-300 px-2 py-1 rounded-md mt-2 hover:bg-slate-100">Review & Take Action</button></div></div></div>
+                            <div class="p-4 rounded-lg border border-blue-200 bg-blue-50"><div class="flex items-start gap-3"><i class="fa-solid fa-magnifying-glass-plus text-blue-500 mt-1"></i><div><h5 class="font-semibold text-blue-800">Missing in GSTR-2B</h5><p class="text-sm text-blue-700 mt-1">Invoice <span class="font-mono bg-blue-100 px-1 rounded">OD-45A</span> from Office Depot is in your books but not in the portal data.</p><button class="text-xs font-semibold text-slate-600 bg-white border border-slate-300 px-2 py-1 rounded-md mt-2 hover:bg-slate-100">Follow up with Vendor</button></div></div></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Review Modal -->
+    <dialog id="review-modal" class="p-0 rounded-xl shadow-2xl w-full max-w-3xl border border-slate-300">
+        <div id="modal-content"></div>
+    </dialog>
+
+    <script type="module">
+        const API_KEY = VITE_GEMINI_API_KEY 
+        let genAI;
+        if (API_KEY ) {
+            genAI = new window.GoogleGenerativeAI(API_KEY);
+        } else {
+            console.warn("Please replace 'YOUR_GEMINI_API_KEY' with your actual key to enable AI features.");
+        }
+
+        let fileQueue = [];
+        const mockDashboardChartData = {
+            labels: ['Software', 'Office Supplies', 'Marketing', 'Raw Materials', 'Utilities'],
+            datasets: [{
+                label: 'Expenses', data: [45000, 18200, 32500, 52000, 8900],
+                backgroundColor: ['#60A5FA', '#A78BFA', '#F472B6', '#4ADE80', '#FBBF24'],
+                borderRadius: 6, borderWidth: 0
+            }]
+        };
+        const initialMockQueue = [
+            { id: 'inv-1', file: { name: 'invoice_final_q3.pdf' }, status: 'success', extractedData: { invoice_number: 'INV-2025-08-15', total_amount: 12500, category: 'Marketing' }, analysis: { flags: [] }, txSignature: generateRandomHash() },
+            { id: 'inv-2', file: { name: 'receipt_techcorp.jpg' }, status: 'ready', extractedData: { invoice_number: 'INV-2025-08-16', total_amount: 8200, category: 'Office Supplies' }, analysis: { flags: ['Duplicate invoice number detected in batch'] } },
+            { id: 'inv-3', file: { name: 'unreadable_scan.png' }, status: 'error', errorMessage: 'AI Error: Document is blurred and cannot be parsed.'},
+            { id: 'inv-4', file: { name: 'invoice_software_license.pdf' }, status: 'pending' },
+        ];
+
+        const views = document.querySelectorAll('.view');
+        const navLinks = document.querySelectorAll('.nav-link');
+        const uploadButton = document.getElementById('upload-button');
+        const fileInput = document.getElementById('file-upload-input');
+        const queueTableBody = document.getElementById('queue-table-body');
+        const processQueueBtn = document.getElementById('process-queue-btn');
+        const secureAllBtn = document.getElementById('secure-all-btn');
+        const chatInput = document.getElementById('chat-input');
+        const chatSubmitBtn = document.getElementById('chat-submit-btn');
+        const chatHistory = document.getElementById('chat-history');
+        const reviewModal = document.getElementById('review-modal');
+        const modalContent = document.getElementById('modal-content');
+        const recentActivityFeed = document.getElementById('recent-activity-feed');
+
+        const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+        function generateRandomHash() { return [...Array(32)].map(() => Math.floor(Math.random() * 16).toString(16)).join(''); }
+        
+        async function fileToGenerativePart(file) {
+            const base64EncodedDataPromise = new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result.split(',')[1]);
+                reader.readAsDataURL(file);
+            });
+            return { inlineData: { data: await base64EncodedDataPromise, mimeType: file.type } };
+        }
+        
+        function updateKPIs() {
+            document.getElementById('kpi-secured').textContent = fileQueue.filter(f => f.status === 'success').length;
+            document.getElementById('kpi-queue').textContent = fileQueue.filter(f => f.status !== 'success' && f.status !== 'error').length;
+            document.getElementById('kpi-alerts').textContent = fileQueue.reduce((sum, f) => sum + (f.analysis?.flags?.length || 0), 0);
+            const totalValue = fileQueue.filter(f => f.status === 'success').reduce((sum, f) => sum + (f.extractedData?.total_amount || 0), 0);
+            document.getElementById('kpi-value').textContent = totalValue.toLocaleString('en-IN');
+        }
+
+        function switchView(viewId) {
+            views.forEach(view => view.classList.add('hidden'));
+            document.getElementById(`${viewId}-view`).classList.remove('hidden');
+            navLinks.forEach(link => {
+                link.classList.remove('active');
+                if (link.dataset.view === viewId) { link.classList.add('active'); }
+            });
+        }
+
+        function renderTable() {
+            if (fileQueue.length === 0) {
+                queueTableBody.innerHTML = `<tr><td colspan="5" class="text-center p-8 text-slate-500">The processing queue is empty.</td></tr>`;
+                return;
+            }
+            queueTableBody.innerHTML = fileQueue.map(item => {
+                let statusHtml = '';
+                switch(item.status) {
+                    case 'pending': statusHtml = `<span class="inline-flex items-center gap-2 text-slate-600"><i class="fa-solid fa-clock"></i> Pending</span>`; break;
+                    case 'extracting': statusHtml = `<span class="inline-flex items-center gap-2 text-blue-600 animate-pulse"><i class="fa-solid fa-spinner fa-spin"></i> Extracting...</span>`; break;
+                    case 'analyzing': statusHtml = `<span class="inline-flex items-center gap-2 text-purple-600 animate-pulse"><i class="fa-solid fa-spinner fa-spin"></i> Analyzing...</span>`; break;
+                    case 'ready': statusHtml = `<span class="inline-flex items-center gap-2 text-yellow-600"><i class="fa-solid fa-pencil"></i> Ready for Review</span>`; break;
+                    case 'securing': statusHtml = `<span class="inline-flex items-center gap-2 text-indigo-600 animate-pulse"><i class="fa-solid fa-spinner fa-spin"></i> Securing...</span>`; break;
+                    case 'success': statusHtml = `<span class="inline-flex items-center gap-2 text-green-700"><i class="fa-solid fa-circle-check"></i> Success</span>`; break;
+                    case 'error': statusHtml = `<span class="inline-flex items-center gap-2 text-red-600" title="${item.errorMessage}"><i class="fa-solid fa-circle-xmark"></i> Error</span>`; break;
+                }
+                let detailsHtml = '---';
+                if (item.extractedData) {
+                    detailsHtml = (item.status === 'ready') ? `
+                        <div class="flex items-center gap-2">
+                            <input type="text" value="${item.extractedData.invoice_number}" data-id="${item.id}" data-field="invoice_number" class="editable-input !w-32" placeholder="Invoice #">
+                            <span>- ₹</span>
+                            <input type="number" value="${item.extractedData.total_amount}" data-id="${item.id}" data-field="total_amount" class="editable-input" placeholder="Amount">
+                        </div>` : `${item.extractedData.invoice_number} - ₹${item.extractedData.total_amount.toLocaleString('en-IN')}`;
+                }
+                const flagsHtml = item.analysis ? (item.analysis.flags.length > 0 ? `<span class="inline-flex items-center gap-2 text-orange-600" title="${item.analysis.flags.join(', ')}"><i class="fa-solid fa-triangle-exclamation"></i> ${item.analysis.flags.length} Flag(s)</span>` : 'None') : '---';
+                let actionHtml = '---';
+                if(item.status === 'success') { actionHtml = `<a href="#" onclick="alert('Simulating opening Solscan for TX: ${item.txSignature}')" class="font-semibold text-blue-600 hover:underline">View on Solscan</a>`; }
+                else if (item.status === 'error') { actionHtml = `<span class="text-red-500 font-medium">Failed</span>`; }
+                else if (item.status === 'ready') { actionHtml = `<button data-id="${item.id}" class="review-btn text-sm font-semibold text-slate-500 hover:text-slate-800">Review</button>`; }
+                return `<tr class="hover:bg-slate-50"><td class="px-6 py-4 font-medium">${item.file.name}</td><td class="px-6 py-4">${statusHtml}</td><td class="px-6 py-4">${detailsHtml}</td><td class="px-6 py-4">${flagsHtml}</td><td class="px-6 py-4">${actionHtml}</td></tr>`;
+            }).join('');
+        }
+
+        function renderRecentActivity() {
+            const recent = fileQueue.filter(f => f.status === 'success').slice(0, 3);
+            if (recent.length === 0) {
+                recentActivityFeed.innerHTML = '<p class="text-sm text-slate-500 text-center">No secured invoices yet.</p>';
+                return;
+            }
+            recentActivityFeed.innerHTML = recent.map(item => `<div class="flex items-start gap-3"><div class="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0"><i class="fa-solid fa-check text-green-600"></i></div><div><p class="font-medium text-sm">Invoice ${item.extractedData.invoice_number} secured.</p><p class="text-xs text-slate-500">Amount: ₹${item.extractedData.total_amount.toLocaleString('en-IN')}</p></div></div>`).join('');
+        }
+
+        function renderDashboardChart() {
+            const ctx = document.getElementById('dashboard-chart').getContext('2d');
+            new Chart(ctx, { type: 'bar', data: mockDashboardChartData, options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: '#E2E8F0' } }, x: { grid: { display: false } } } } });
+        }
+        
+        function openReviewModal(itemId) {
+            const item = fileQueue.find(f => f.id === itemId);
+            if (!item) return;
+            modalContent.innerHTML = `<div class="p-6"><div class="flex justify-between items-center mb-4"><h2 class="text-xl font-bold">Review Invoice: ${item.file.name}</h2><button onclick="document.getElementById('review-modal').close()" class="text-slate-500 hover:text-slate-800">&times;</button></div><div class="grid grid-cols-2 gap-6"><div class="bg-slate-200 rounded-lg flex items-center justify-center aspect-video"><i class="fa-solid fa-file-image text-4xl text-slate-400"></i><p class="ml-2 text-slate-500">Image Preview</p></div><div class="space-y-4"><div><label class="text-sm font-medium text-slate-600">Invoice Number</label><input type="text" value="${item.extractedData.invoice_number}" class="mt-1 w-full p-2 border rounded-md" data-modal-field="invoice_number"></div><div><label class="text-sm font-medium text-slate-600">Total Amount (₹)</label><input type="number" value="${item.extractedData.total_amount}" class="mt-1 w-full p-2 border rounded-md" data-modal-field="total_amount"></div><div><h4 class="text-sm font-medium text-slate-600">AI Flags</h4><div class="mt-2 text-sm p-3 bg-yellow-50 text-yellow-800 rounded-md border border-yellow-200">${item.analysis.flags.length > 0 ? item.analysis.flags.join(', ') : 'No issues found.'}</div></div></div></div></div><div class="p-4 bg-slate-50 border-t flex justify-end gap-3"><button onclick="document.getElementById('review-modal').close()" class="btn-secondary px-4 py-2 rounded-lg text-sm font-semibold">Cancel</button><button id="save-modal-changes" data-id="${item.id}" class="btn-primary px-4 py-2 rounded-lg text-sm font-semibold">Save Changes</button></div>`;
+            document.getElementById('save-modal-changes').addEventListener('click', (e) => {
+                const updatedItem = fileQueue.find(f => f.id === e.currentTarget.dataset.id);
+                if(updatedItem) {
+                    updatedItem.extractedData.invoice_number = modalContent.querySelector('[data-modal-field="invoice_number"]').value;
+                    updatedItem.extractedData.total_amount = parseFloat(modalContent.querySelector('[data-modal-field="total_amount"]').value);
+                    renderTable();
+                    reviewModal.close();
+                }
+            });
+            reviewModal.showModal();
+        }
+
+        uploadButton.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', (event) => {
+            const files = event.target.files;
+            if (!files) return;
+            const newFiles = Array.from(files).map(file => ({ id: `${file.name}-${file.lastModified}`, file, status: 'pending' }));
+            fileQueue.push(...newFiles);
+            switchView('processing');
+            renderTable();
+            updateKPIs();
+        });
+        processQueueBtn.addEventListener('click', async () => {
+             if (!genAI) { alert("Please add your Gemini API Key to the script tag to use this feature."); return; }
+            const pendingFiles = fileQueue.filter(f => f.status === 'pending');
+            if(pendingFiles.length === 0) return;
+            processQueueBtn.classList.add('btn-disabled');
+            for (const item of pendingFiles) {
+                try {
+                    item.status = 'extracting'; renderTable();
+                    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+                    const imagePart = await fileToGenerativePart(item.file);
+                    const extractPrompt = `From the attached invoice, extract and return ONLY a single, clean JSON object with: "invoice_number", "invoice_date", "vendor_gstin", "taxable_amount", "total_tax", "total_amount", "category". If a field isn't present, use null.`;
+                    let result = await model.generateContent([extractPrompt, imagePart]);
+                    let jsonText = result.response.text().trim().replace(/```json|```/g, "");
+                    item.extractedData = JSON.parse(jsonText);
+                    item.status = 'analyzing'; renderTable();
+                    const analysisPrompt = `You are a fraud detection AI. Analyze this invoice data: ${JSON.stringify(item.extractedData)}. Return a JSON object: { "summary": "...", "flags": ["description of any potential issue, if any"] }`;
+                    result = await model.generateContent(analysisPrompt);
+                    jsonText = result.response.text().trim().replace(/```json|```/g, "");
+                    item.analysis = JSON.parse(jsonText);
+                    item.status = 'ready';
+                } catch (err) {
+                    console.error("AI Processing Error:", err);
+                    item.status = 'error';
+                    item.errorMessage = err.message;
+                } finally {
+                    renderTable();
+                    updateKPIs();
+                }
+            }
+            processQueueBtn.classList.remove('btn-disabled');
+        });
+        secureAllBtn.addEventListener('click', async () => {
+            const readyFiles = fileQueue.filter(f => f.status === 'ready');
+            if(readyFiles.length === 0) return;
+            secureAllBtn.classList.add('btn-disabled');
+            for (const item of readyFiles) {
+                item.status = 'securing'; renderTable();
+                await sleep(2000 + Math.random() * 1000);
+                if (Math.random() > 0.9) {
+                    item.status = 'error';
+                    item.errorMessage = 'Transaction rejected by user (simulated).';
+                } else {
+                    item.status = 'success';
+                    item.txSignature = generateRandomHash();
+                }
+                renderTable();
+                updateKPIs();
+                renderRecentActivity();
+            }
+            secureAllBtn.classList.remove('btn-disabled');
+        });
+        navLinks.forEach(link => link.addEventListener('click', (e) => { e.preventDefault(); switchView(e.currentTarget.dataset.view); }));
+        queueTableBody.addEventListener('change', (event) => {
+            const target = event.target;
+            if (target.tagName === 'INPUT' && target.dataset.id) {
+                const itemId = target.dataset.id;
+                const field = target.dataset.field;
+                const value = target.type === 'number' ? parseFloat(target.value) || 0 : target.value;
+                const itemToUpdate = fileQueue.find(item => item.id === itemId);
+                if (itemToUpdate && itemToUpdate.extractedData) { itemToUpdate.extractedData[field] = value; }
+            }
+        });
+        queueTableBody.addEventListener('click', (event) => {
+            const reviewButton = event.target.closest('.review-btn');
+            if (reviewButton) { openReviewModal(reviewButton.dataset.id); }
+        });
+
+        function renderChatMessage(content, sender, type = 'text') {
+            const messageDiv = document.createElement('div');
+            const iconHtml = sender === 'ai' ? `<div class="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center flex-shrink-0"><i class="fa-solid fa-robot text-slate-600"></i></div>` : `<div class="w-8 h-8 rounded-full bg-slate-600 flex items-center justify-center flex-shrink-0"><i class="fa-solid fa-user text-white"></i></div>`;
+            const bubbleClasses = sender === 'ai' ? 'bg-slate-100 rounded-lg rounded-tl-none' : 'bg-blue-600 text-white rounded-lg rounded-tr-none';
+            const containerClasses = sender === 'ai' ? 'flex items-start gap-3 max-w-lg' : 'flex items-start gap-3 justify-end w-full';
+            let contentHtml = '';
+            if (type === 'chart') {
+                const canvasId = `chart-${Date.now()}`;
+                contentHtml = `<div class="p-4 bg-white rounded-md shadow-sm border w-full"><canvas id="${canvasId}"></canvas></div>`;
+                setTimeout(() => renderChartInChat(content, canvasId), 0);
+            } else {
+                contentHtml = `<div class="${bubbleClasses} p-4 max-w-md"><p class="text-sm">${content}</p></div>`;
+            }
+            messageDiv.className = containerClasses;
+            messageDiv.innerHTML = `${sender === 'ai' ? iconHtml : ''}${contentHtml}${sender === 'user' ? iconHtml : ''}`;
+            chatHistory.appendChild(messageDiv);
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+            return messageDiv;
+        }
+        
+        function renderChartInChat(chartData, canvasId) {
+            const ctx = document.getElementById(canvasId)?.getContext('2d');
+            if(!ctx) return;
+            new Chart(ctx, { type: chartData.type, data: chartData.data, options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12 } } }, scales: { y: { beginAtZero: true } } } });
+        }
+
+        async function handleChatSubmit() {
+            if (!genAI) { alert("Please add your Gemini API Key to the script tag to use this feature."); return; }
+            const userInput = chatInput.value.trim();
+            if (!userInput) return;
+            renderChatMessage(userInput, 'user');
+            chatInput.value = '';
+            const contextData = fileQueue.filter(f => f.status === 'success' && f.extractedData).map(f => f.extractedData);
+            const masterPrompt = `You are FinAI, an expert financial analyst. Based ONLY on this provided JSON data of invoices, answer the user's question. Be concise. If the user asks for a graph or chart (e.g., 'show me a graph of my monthly expenses by category'), respond ONLY with a JSON object specifically formatted for Chart.js, like this: \`\`\`json{"type": "bar", "data": {"labels": ["Category A", "Category B"], "datasets": [{"label": "Expenses", "data": [15000, 30000], "backgroundColor": ["#F472B6", "#A78BFA"]}]}}\`\`\`. Do not add any other text outside this JSON object. DATA: ${JSON.stringify(contextData)} USER QUESTION: ${userInput}`;
+            const thinkingMessage = renderChatMessage('<i class="fa-solid fa-spinner fa-spin"></i> Thinking...', 'ai', 'text');
+            try {
+                const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+                const result = await model.generateContent(masterPrompt);
+                const response = await result.response;
+                let text = response.text();
+                thinkingMessage.remove();
+                try {
+                    const cleanedText = text.trim().replace(/^```json|```$/g, "");
+                    const chartJson = JSON.parse(cleanedText);
+                    if (chartJson.type && chartJson.data) { renderChatMessage(chartJson, 'ai', 'chart'); }
+                    else { renderChatMessage(text, 'ai'); }
+                } catch (e) { renderChatMessage(text, 'ai'); }
+            } catch (error) {
+                console.error("Chatbot Error:", error);
+                thinkingMessage.remove();
+                renderChatMessage("Sorry, I encountered an error. Please try again.", 'ai');
+            }
+        }
+        
+        chatSubmitBtn.addEventListener('click', handleChatSubmit);
+        chatInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); handleChatSubmit(); }});
+
+        function renderInitialChat() {
+            chatHistory.innerHTML = '';
+            renderChatMessage("Hello! I'm FinAI. Ask me anything about your secured invoices. For example, try asking me to create a chart of expenses by category.", 'ai');
+            renderChatMessage("Show me a chart of my secured expenses by category.", 'user');
+            const securedExpenses = fileQueue.filter(f => f.status === 'success' && f.extractedData?.category);
+            const categoryTotals = securedExpenses.reduce((acc, curr) => {
+                const category = curr.extractedData.category;
+                const amount = curr.extractedData.total_amount;
+                acc[category] = (acc[category] || 0) + amount;
+                return acc;
+            }, {});
+            const chartData = {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(categoryTotals),
+                    datasets: [{
+                        label: 'Expenses',
+                        data: Object.values(categoryTotals),
+                        backgroundColor: ['#F472B6', '#A78BFA', '#60A5FA', '#4ADE80'],
+                        borderRadius: 6,
+                    }]
+                }
+            };
+            renderChatMessage(chartData, 'ai', 'chart');
+        }
+        
+        function initializeApp() {
+            fileQueue = initialMockQueue;
+            switchView('dashboard');
+            renderTable();
+            updateKPIs();
+            renderDashboardChart();
+            renderRecentActivity();
+            renderInitialChat();
+        }
+
+        initializeApp();
+    </script>
+</body>
+</html>
+

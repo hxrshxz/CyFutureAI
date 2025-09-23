@@ -1,0 +1,186 @@
+@import url('https://fonts.googleapis.com/css2?family=Geist+Mono:wght@100..900&display=swap');
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --background: 0 0% 0%; /* Pure black background */
+    --foreground: 0 0% 98%; /* Almost white text */
+    --card: 0 0% 7%; /* Very dark gray cards */
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 7%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 350 89% 60%; /* Rose/pink primary - similar to Cyfuture */
+    --primary-foreground: 0 0% 98%;
+    --secondary: 240 5% 26%; /* Subtle gray secondary */
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 15%; /* Dark muted background */
+    --muted-foreground: 0 0% 63%; /* Muted text */
+    --accent: 350 89% 60%; /* Rose accent */
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62% 55%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 15%; /* Subtle borders */
+    --input: 0 0% 15%;
+  --ring: 350 89% 60%; /* Rose focus ring 
+    --radius: 0.75rem; /* Cyfuture uses 0.75rem radius */
+    --font-mono: 'Geist Mono', ui-monospace, monospace;
+  }
+}
+ 
+* {
+  border-color: hsl(var(--border));
+}
+
+body {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: var(--font-mono);
+}
+
+/* Cyfuture-style pearl mist background */
+.pearl-mist-bg {
+  background: radial-gradient(ellipse 50% 35% at 50% 0%, rgba(226, 232, 240, 0.08), transparent 60%), #000000;
+}
+
+/* Enhanced glassmorphism for cards */
+.glass-card {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 
+    0 4px 6px -1px rgba(0, 0, 0, 0.1),
+    0 2px 4px -1px rgba(0, 0, 0, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+/* Rose glow effects for primary elements */
+.rose-glow {
+  box-shadow: 
+    0 0 20px rgba(244, 63, 94, 0.3),
+    0 4px 6px -1px rgba(244, 63, 94, 0.1);
+}
+
+.rose-glow-subtle {
+  box-shadow: 
+    0 0 15px rgba(244, 63, 94, 0.15),
+    0 2px 4px -1px rgba(244, 63, 94, 0.05);
+}
+
+.rose-glow-strong {
+  box-shadow: 
+    0 0 30px rgba(244, 63, 94, 0.4),
+    0 8px 16px -4px rgba(244, 63, 94, 0.2);
+}
+
+/* Button variants matching Cyfuture style */
+.btn-primary {
+  background: linear-gradient(135deg, rgba(244, 63, 94, 0.9), rgba(236, 72, 153, 0.9));
+  border: 1px solid rgba(244, 63, 94, 0.3);
+  backdrop-filter: blur(12px);
+}
+
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(12px);
+}
+
+/* Animation keyframes */
+@keyframes pearl-shimmer {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.8; }
+}
+
+@keyframes rose-pulse {
+  0%, 100% { 
+    box-shadow: 0 0 20px rgba(244, 63, 94, 0.3);
+  }
+  50% { 
+    box-shadow: 0 0 30px rgba(244, 63, 94, 0.5);
+  }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+.pearl-shimmer {
+  animation: pearl-shimmer 3s ease-in-out infinite;
+}
+
+.rose-pulse {
+  animation: rose-pulse 2s ease-in-out infinite;
+}
+
+.float-animation {
+  animation: float 6s ease-in-out infinite;
+}
+
+/* Navigation styles matching Cyfuture */
+.nav-item {
+  position: relative;
+  padding: 0.5rem 1rem;
+  color: hsl(var(--muted-foreground));
+  transition: color 0.2s ease;
+}
+
+.nav-item:hover {
+  color: hsl(var(--foreground));
+}
+
+.nav-item.active::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 20px;
+  height: 2px;
+  background: hsl(var(--primary));
+  border-radius: 1px;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(244, 63, 94, 0.6);
+  border-radius: 2px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(244, 63, 94, 0.8);
+}
+
+/* Input styles */
+.input-field {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(8px);
+  transition: all 0.2s ease;
+}
+
+.input-field:focus {
+  border-color: hsl(var(--primary));
+  box-shadow: 0 0 0 2px rgba(244, 63, 94, 0.1);
+}
+
+/* Loading spinner */
+.spinner {
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-left: 2px solid hsl(var(--primary));
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
