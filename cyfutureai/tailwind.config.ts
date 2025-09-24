@@ -1,5 +1,6 @@
-/** @type {import('tailwindcss').Config} */
-export default {
+import type { Config } from 'tailwindcss';
+
+const config: Config = {
   content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
   theme: {
     extend: {
@@ -50,13 +51,26 @@ export default {
           "radial-gradient(ellipse 50% 35% at 50% 0%, rgba(226, 232, 240, 0.08), transparent 60%)",
         "rose-gradient":
           "linear-gradient(135deg, rgba(244, 63, 94, 0.9), rgba(236, 72, 153, 0.9))",
+        'gradient-primary': 'linear-gradient(to right bottom, #8b5cf6, #38bdf8)',
+      },
+      boxShadow: {
+        'soft': '0 4px 30px rgba(0, 0, 0, 0.1)',
+      },
+      keyframes: {
+        shimmer: {
+          '0%': { backgroundPosition: '200% 0' },
+          '100%': { backgroundPosition: '-200% 0' },
+        },
       },
       animation: {
         "pearl-shimmer": "pearl-shimmer 3s ease-in-out infinite",
         "rose-pulse": "rose-pulse 2s ease-in-out infinite",
         float: "float 6s ease-in-out infinite",
+        shimmer: 'shimmer 1.5s infinite linear',
       },
     },
   },
   plugins: [],
 };
+
+export default config;
