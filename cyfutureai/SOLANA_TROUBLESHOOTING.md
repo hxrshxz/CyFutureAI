@@ -1,22 +1,26 @@
 # Solana Integration Troubleshooting
 
 ## Current Status
+
 The app is configured to gracefully handle Solana RPC issues and fall back to demo mode.
 
 ## Recent Fixes Applied
 
 ### 1. Multiple RPC Endpoints
+
 - Primary: Ankr RPC (https://rpc.ankr.com/solana_devnet)
 - Fallback: Official Solana (https://api.devnet.solana.com)
 - Backup: Sonic Game (https://devnet.sonic.game)
 
 ### 2. Improved Error Handling
+
 - Balance check failures → Demo mode
-- Connection timeouts → Demo mode  
+- Connection timeouts → Demo mode
 - JSON-RPC errors → Demo mode
 - Transaction failures → Demo mode
 
 ### 3. User Experience
+
 - Clear progress messages
 - Specific error explanations
 - Always functional (demo mode as fallback)
@@ -31,6 +35,7 @@ The app is configured to gracefully handle Solana RPC issues and fall back to de
 ## For Users
 
 The app will work regardless of network issues. You'll see:
+
 - ✅ **Success**: Real transaction with Solana Explorer link
 - ⚡ **Demo**: Simulated transaction (still shows the functionality)
 

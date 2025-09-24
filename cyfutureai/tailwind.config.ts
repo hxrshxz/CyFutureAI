@@ -1,9 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 export default {
-  content: [
-    "./index.html",
-    "./src/**/*.{js,ts,jsx,tsx}",
-  ],
+  content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
   theme: {
     extend: {
       colors: {
@@ -41,18 +38,25 @@ export default {
       fontFamily: {
         sans: ["var(--font-mono)", "Geist Mono", "ui-monospace", "monospace"],
         mono: ["var(--font-mono)", "Geist Mono", "ui-monospace", "monospace"],
-        display: ["var(--font-mono)", "Geist Mono", "ui-monospace", "monospace"],
+        display: [
+          "var(--font-mono)",
+          "Geist Mono",
+          "ui-monospace",
+          "monospace",
+        ],
       },
       backgroundImage: {
-        'pearl-mist': 'radial-gradient(ellipse 50% 35% at 50% 0%, rgba(226, 232, 240, 0.08), transparent 60%)',
-        'rose-gradient': 'linear-gradient(135deg, rgba(244, 63, 94, 0.9), rgba(236, 72, 153, 0.9))',
+        "pearl-mist":
+          "radial-gradient(ellipse 50% 35% at 50% 0%, rgba(226, 232, 240, 0.08), transparent 60%)",
+        "rose-gradient":
+          "linear-gradient(135deg, rgba(244, 63, 94, 0.9), rgba(236, 72, 153, 0.9))",
       },
       animation: {
-        'pearl-shimmer': 'pearl-shimmer 3s ease-in-out infinite',
-        'rose-pulse': 'rose-pulse 2s ease-in-out infinite',
-        'float': 'float 6s ease-in-out infinite',
+        "pearl-shimmer": "pearl-shimmer 3s ease-in-out infinite",
+        "rose-pulse": "rose-pulse 2s ease-in-out infinite",
+        float: "float 6s ease-in-out infinite",
       },
     },
   },
   plugins: [],
-}
+};

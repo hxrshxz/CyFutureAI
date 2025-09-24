@@ -1,806 +1,763 @@
-import { useState, useRef, useEffect } from "react";
+"use client";
+
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import type { Variants } from "framer-motion";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { Button } from "./components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./components/ui/card";
-import { Badge } from "./components/ui/badge";
-import { Input } from "./components/ui/input";
-import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
-import { useSolanaAction } from "./hooks/useSolanaAction";
-import { useIpfs } from "./hooks/useIpfs";
-import graphMonthly from './assets/graph-monthly.png';
+import { Bot, User, X, TrendingUp, ArrowDown, ArrowUp } from "lucide-react";
+import { useSpeechRecognition } from "./hooks/useSpeechRecognition";
+import ListeningIndicator from "./components/ai/ListeningIndicator";
+import GeminiShimmerEffect from "./components/ai/GeminiShimmerEffect";
+import Toast from "./components/ai/Toast";
+import INGRESCommandBar from "./components/ai/CommandBar";
+import { MemoizedStatCard } from "./components/ai/StatCard";
+import AnimatedMarkdownMessage from "./components/ai/AnimatedMarkdownMessage";
+import HydrogeologicalAnalysisChart from "./components/ai/HydrogeologicalAnalysisChart";
 
-import {
-  Search, Camera, Bot, FileText, Wallet, 
-  ShieldCheck, CheckCircle, AlertTriangle, ShoppingCart, BarChart2,
-  DollarSign, FileDown, Zap
-} from "lucide-react";
+type ChatMessage = {
+  id: number;
+  type: string;
+  text?: string;
+  component?: React.ReactNode;
+};
 
-// --- Types ---
-interface ToastProps {
-  message: string;
-  type: 'success' | 'error' | 'info';
-  onDismiss: () => void;
-}
+// --- Main INGRES Assistant Component ---
+const AIAccountant = ({ embedded = false }: { embedded?: boolean }) => {
+  const [view, setView] = useState("dashboard");
+  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
+  // --- 1. Replace your old handler function with this corrected version ---
+  const handleFakeMapAnalysis = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
 
-interface ExtractedData {
-  invoice_number: string;
-  invoice_date: string;
-  total_amount: string;
-  total_tax?: string;
-  vendor_gstin?: string;
-  [key: string]: any;
-}
+    // This is the new logic to auto-open the chat window
+    setView("chat");
 
-interface ExtractedDataTableProps {
-  data: ExtractedData | null;
-  fileHash: string;
-  dataHash: string;
-  txSignature: string;
-}
+    const userMessage: ChatMessage = {
+      id: Date.now(),
+      type: "user",
+      text: `Analyzing map: ${file.name}`,
+    };
 
-interface FileDropProps {
-  onFileSelect: (file: File) => void;
-  isProcessing: boolean;
-  appState: string;
-}
+    // --- THIS IS THE CRUCIAL FIX ---
+    // This now ADDS the message to the end of the previous history instead of replacing it.
+    setChatHistory((previousChatHistory) => [
+      ...previousChatHistory,
+      userMessage,
+    ]);
 
-// --- Helper Functions ---
-async function fileToGenerativePart(file: File) {
-  const base64EncodedDataPromise = new Promise<string>((resolve) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve((reader.result as string).split(",")[1]);
-    reader.readAsDataURL(file);
-  });
-  return {
-    inlineData: { data: await base64EncodedDataPromise, mimeType: file.type },
+    setIsThinking(true);
+
+    setTimeout(() => {
+      const graphMessage: ChatMessage = {
+        id: Date.now() + 1,
+        type: "bot",
+        component: <HydrogeologicalAnalysisChart />, // Or your preferred graph component name
+      };
+
+      // Use the functional update form to guarantee the latest state
+      setChatHistory((previousChatHistory) => [
+        ...previousChatHistory,
+        graphMessage,
+      ]);
+      setIsThinking(false);
+    }, 4000);
+
+    // Clear the file input for the next use
+    if (event.target) {
+      event.target.value = "";
+    }
   };
-}
+  const [isThinking, setIsThinking] = useState(false);
+  const [inputValue, setInputValue] = useState("");
+  const [activeYear, setActiveYear] = useState("Latest (2025)");
+  const [language, setLanguage] = useState("en-US");
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const [toast, setToast] = useState({
+    message: "",
+    type: "info",
+    visible: false,
+  });
 
-async function generateHash(data: BufferSource): Promise<string> {
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
-}
+  // Co-Pilot Mode state variables
+  const [isCoPilotMode, setIsCoPilotMode] = useState(false);
+  const [isListeningForFollowUp, setIsListeningForFollowUp] = useState(false);
+  const [showListeningIndicator, setShowListeningIndicator] = useState(false);
 
-// --- Toast Notification Component ---
-const Toast = ({ message, type, onDismiss }: ToastProps) => {
+  const {
+    text: voiceText,
+    startListening,
+    stopListening,
+    isListening,
+    hasRecognitionSupport,
+  } = useSpeechRecognition({ lang: language });
+
+  // Text-to-speech function for Co-Pilot Mode with enhanced human-like voice
+  const speakText = (text: string, onEnd?: () => void) => {
+    if (!isCoPilotMode) return;
+
+    // Stop any ongoing speech
+    if (window.speechSynthesis.speaking) {
+      window.speechSynthesis.cancel();
+    }
+
+    const utterance = new SpeechSynthesisUtterance(text);
+
+    // Get available voices
+    const voices = window.speechSynthesis.getVoices();
+
+    // Find the best natural-sounding voice based on language
+    let selectedVoice;
+
+    if (language.startsWith("en")) {
+      // Look for high-quality English voices in this order of preference
+      const preferredVoiceNames = [
+        "Google UK English Female", // Very natural-sounding
+        "Microsoft Aria Online (Natural)",
+        "Microsoft Libby Online (Natural)",
+        "Apple Samantha",
+        "Apple Moira",
+        "Daniel",
+        "Samantha",
+        "Karen",
+        "Google US English",
+        "Alex",
+      ];
+
+      // Try to find one of the preferred voices
+      for (const voiceName of preferredVoiceNames) {
+        const voice = voices.find((v) => v.name === voiceName);
+        if (voice) {
+          selectedVoice = voice;
+          break;
+        }
+      }
+
+      // If no preferred voice found, try to find any natural-sounding voice
+      if (!selectedVoice) {
+        selectedVoice = voices.find(
+          (voice) =>
+            (voice.name.toLowerCase().includes("natural") ||
+              voice.name.toLowerCase().includes("premium") ||
+              voice.name.toLowerCase().includes("enhanced")) &&
+            voice.lang.startsWith("en")
+        );
+      }
+    } else if (language.startsWith("hi")) {
+      // For Hindi, find the best available voice
+      const preferredHindiVoices = [
+        "Google हिन्दी",
+        "Microsoft Swara Online (Natural)",
+        "Lekha",
+      ];
+
+      for (const voiceName of preferredHindiVoices) {
+        const voice = voices.find((v) => v.name === voiceName);
+        if (voice) {
+          selectedVoice = voice;
+          break;
+        }
+      }
+    }
+
+    // If still no voice found, use any voice matching the language
+    if (!selectedVoice) {
+      selectedVoice = voices.find((voice) =>
+        voice.lang.startsWith(language.split("-")[0])
+      );
+    }
+
+    // If a voice was found, use it
+    if (selectedVoice) {
+      utterance.voice = selectedVoice;
+    }
+
+    // Optimize parameters for natural speech
+    utterance.rate = 0.92; // Slightly slower for more clarity
+    utterance.pitch = 1.0; // Natural pitch
+
+    // Process text for more natural speech patterns
+    // Add slight pauses at punctuation for more natural speech rhythm
+    text = text.replace(/([.,!?;:])/g, "$1 ");
+
+    // Add longer pauses for paragraph breaks
+    text = text.replace(/\n\n/g, ".\n\n");
+
+    // Add emphasis to important terms
+    text = text.replace(
+      /\b(critical|severe|important|significant|Over-Exploited|Critical|Safe)\b/g,
+      " $1 "
+    );
+
+    // Convert numerical data for better speech
+    text = text.replace(/(\d+)%/g, "$1 percent");
+    text = text.replace(/(\d+)\.(\d+)/g, "$1 point $2");
+
+    // Humanize time references
+    text = text.replace(/(\d{4})-(\d{4})/g, "$1 to $2");
+
+    // Insert occasional filler words for more natural speech
+    const sentences = text.split(/(?<=[.!?])\s+/);
+    const processedSentences = sentences.map((sentence, index) => {
+      // Add filler words to about 10% of sentences
+      if (index > 0 && index % 10 === 0) {
+        const fillers = [
+          "Now, ",
+          "So, ",
+          "Well, ",
+          "You see, ",
+          "Actually, ",
+          "Essentially, ",
+        ];
+        const randomFiller =
+          fillers[Math.floor(Math.random() * fillers.length)];
+        return randomFiller + sentence;
+      }
+      return sentence;
+    });
+
+    utterance.text = processedSentences.join(" ");
+
+    if (onEnd) {
+      utterance.onend = onEnd;
+    }
+
+    window.speechSynthesis.speak(utterance);
+  };
+
+  // Initialize speech synthesis voices
   useEffect(() => {
-    const timer = setTimeout(onDismiss, 4000);
-    return () => clearTimeout(timer);
-  }, [onDismiss]);
-  
-  const bgColor = type === 'success' ? 'bg-green-500' : type === 'error' ? 'bg-red-500' : 'bg-slate-800';
-  const Icon = type === 'success' ? CheckCircle : type === 'error' ? AlertTriangle : Bot;
-  
-  return (
-    <motion.div 
-      initial={{ y: 100, opacity: 0 }} 
-      animate={{ y: 0, opacity: 1 }} 
-      exit={{ y: 100, opacity: 0 }} 
-      className={`fixed bottom-5 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 p-4 rounded-lg shadow-2xl text-white ${bgColor}`}
-    >
-      <Icon className="h-6 w-6" />
-      <span className="text-lg font-medium">{message}</span>
-    </motion.div>
-  );
-};
+    // Safari requires this to be manually triggered to load voices
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      // Load voices on first render
+      const loadVoices = () => {
+        window.speechSynthesis.getVoices();
+      };
 
-// --- Invoice Skeleton with Staggered Animation ---
-const InvoiceSkeleton = () => {
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: { opacity: 1, transition: { staggerChildren: 0.07 } }
-  };
+      // Check if voices are already loaded
+      if (window.speechSynthesis.getVoices().length === 0) {
+        // Set up event listener for when voices are loaded
+        window.speechSynthesis.addEventListener("voiceschanged", loadVoices);
 
-  const itemVariants: Variants = {
-    hidden: { opacity: 0, x: -20 },
-    visible: { 
-      opacity: 1, 
-      x: 0, 
-      transition: { 
-        type: "spring" as const, 
-        stiffness: 100 
-      } 
+        // Initial call to load voices
+        loadVoices();
+
+        // Cleanup event listener
+        return () => {
+          window.speechSynthesis.removeEventListener(
+            "voiceschanged",
+            loadVoices
+          );
+        };
+      }
     }
-  };
+  }, []);
 
-  return (
-    <motion.div
-      className="bg-white/80 p-4 rounded-xl border border-slate-200/80 w-full max-w-md"
-      variants={containerVariants}
-      initial="hidden"
-      animate="visible"
-    >
-      <div className="flex justify-between items-start mb-6">
-        <motion.div className="bg-sky-100 rounded-md h-8 w-1/4" variants={itemVariants} />
-        <motion.div className="bg-sky-100 rounded-md h-5 w-2/5" variants={itemVariants} />
-      </div>
-      <div className="space-y-3">
-        <motion.div className="bg-sky-100 rounded-md h-4 w-3/4" variants={itemVariants} />
-        <motion.div className="bg-sky-100 rounded-md h-4 w-2/3" variants={itemVariants} />
-      </div>
-      <div className="mt-8 space-y-3">
-        <motion.div className="bg-sky-100 rounded-md h-5 w-4/5" variants={itemVariants} />
-        <motion.div className="bg-sky-100 rounded-md h-5 w-3/5 opacity-80" variants={itemVariants} />
-        <motion.div className="bg-sky-100 rounded-md h-5 w-2/5 opacity-60" variants={itemVariants} />
-      </div>
-    </motion.div>
-  );
-};
+  useEffect(() => {
+    if (voiceText) setInputValue(voiceText);
+  }, [voiceText]);
 
-// --- Extracted Data Display Component ---
-const ExtractedDataTable = ({ data, fileHash, dataHash, txSignature }: ExtractedDataTableProps) => (
-  <div className="bg-white/80 p-5 rounded-xl border border-slate-200/80 w-full text-slate-800 max-w-xl">
-    <div className="flex justify-between mb-4">
-      <h3 className="text-lg font-semibold">Extracted Data</h3>
-      <div className="flex items-center gap-2">
-        <ShieldCheck className="h-5 w-5 text-green-600" />
-        <span className="text-sm text-green-600 font-medium">Blockchain Secured</span>
-      </div>
-    </div>
-    
-    <div className="space-y-4">
-      {data && Object.entries(data).map(([key, value]) => (
-        <div key={key} className="flex justify-between border-b border-slate-100 pb-2">
-          <span className="text-sm font-medium capitalize">{key.replace(/_/g, ' ')}</span>
-          <span className="text-sm">{value}</span>
-        </div>
-      ))}
-      
-      <div className="pt-4 space-y-2">
-        <div className="flex justify-between">
-          <span className="text-xs text-slate-500">File Hash</span>
-          <span className="text-xs font-mono text-slate-500 truncate max-w-[200px]">{fileHash}</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-xs text-slate-500">Data Hash</span>
-          <span className="text-xs font-mono text-slate-500 truncate max-w-[200px]">{dataHash}</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-xs text-slate-500">Solana Transaction</span>
-          <a 
-            href={`https://explorer.solana.com/tx/${txSignature}?cluster=devnet`}
-            target="_blank"
-            rel="noopener noreferrer" 
-            className="text-xs font-mono text-blue-500 hover:underline truncate max-w-[200px]"
-          >
-            {txSignature}
-          </a>
-        </div>
-      </div>
-    </div>
-  </div>
-);
+  const handleMicClick = () => {
+    if (isListening) {
+      stopListening();
+      setShowListeningIndicator(false);
+      setIsListeningForFollowUp(false);
 
-// --- File Drop Component ---
-const FileDrop = ({ onFileSelect, isProcessing, appState }: FileDropProps) => {
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  
-  const handleImageButtonClick = () => fileInputRef.current?.click();
-  
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (files && files.length > 0) {
-      onFileSelect(files[0]);
-    }
-  };
-  
-  return (
-    <div className="bg-white/80 p-8 rounded-xl border border-slate-200/80 w-full max-w-md">
-      <div className="text-center mb-6">
-        <div className="bg-slate-50 p-3 rounded-full inline-flex items-center justify-center mb-4">
-          <FileText className="h-8 w-8 text-sky-500" />
-        </div>
-        <h3 className="text-lg font-semibold text-slate-800">Upload Invoice</h3>
-        <p className="text-slate-500 text-sm mt-1">
-          Upload an invoice to extract and secure its data
-        </p>
-      </div>
-      
-      <div 
-        className={`border-2 border-dashed border-slate-300 rounded-lg p-8 text-center transition-all ${isProcessing ? 'opacity-50' : 'hover:border-sky-400 cursor-pointer'}`}
-        onClick={isProcessing ? undefined : handleImageButtonClick}
-      >
-        <input
-          type="file"
-          ref={fileInputRef}
-          className="hidden"
-          onChange={handleFileChange}
-          accept="image/*,.pdf"
-          disabled={isProcessing}
-        />
-        
-        <div className="flex flex-col items-center justify-center gap-4">
-          <Camera className="h-12 w-12 text-slate-400" />
-          <div>
-            <p className="text-sm font-medium text-slate-600 mb-1">
-              {isProcessing ? 'Processing...' : 'Drag & drop or click to upload'}
-            </p>
-            <p className="text-xs text-slate-500">
-              Supports JPG, PNG, PDF (max 10MB)
-            </p>
-          </div>
-        </div>
-      </div>
-      
-      <div className="mt-6">
-        <Button 
-          className="w-full"
-          onClick={handleImageButtonClick}
-          disabled={isProcessing}
-        >
-          {isProcessing ? (
-            <>
-              <motion.div
-                className="mr-2 h-4 w-4 border-2 border-slate-200 border-t-white rounded-full"
-                animate={{ rotate: 360 }}
-                transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-              />
-              Processing...
-            </>
-          ) : appState === 'ERROR' ? 'Try Again' : 'Select Invoice'}
-        </Button>
-      </div>
-    </div>
-  );
-};
-
-// --- MAIN AI ACCOUNTANT APPLICATION ---
-export const AIAccountant = () => {
-  // State
-  const [appState, setAppState] = useState<
-    'IDLE' | 'EXTRACTING' | 'PREVIEW' | 'SECURING' | 'SUCCESS' | 'ERROR'
-  >('IDLE');
-  
-  const [extractedData, setExtractedData] = useState<ExtractedData | null>(null);
-
-  const [fileHash, setFileHash] = useState<string>('');
-  const [dataHash, setDataHash] = useState<string>('');
-  const [txSignature, setTxSignature] = useState<string>('');
-  const [ipfsFileHash, setIpfsFileHash] = useState<string>('');
-  const [ipfsDataHash, setIpfsDataHash] = useState<string>('');
-  const [errorMessage, setErrorMessage] = useState<string>('');
-  const [toastInfo, setToastInfo] = useState<{message: string, type: 'success' | 'error' | 'info', visible: boolean}>({ 
-    message: '', type: 'info', visible: false 
-  });
-  
-  // Hooks
-  const { sendTransaction, isSending } = useSolanaAction();
-  const { uploadFile, uploadJson, isUploading } = useIpfs();
-  
-  // Show toast message
-  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
-    setToastInfo({ message, type, visible: true });
-  };
-
-  // Test transaction function
-  const handleTestTransaction = async () => {
-    if (isSending) return;
-    
-    try {
-      showToast('Sending test transaction...', 'info');
-      const result = await sendTransaction('CyFutureAI - Test Transaction - ' + new Date().toISOString());
-      
-      if (result.signature) {
-        showToast(`Test transaction successful! Signature: ${result.signature}`, 'success');
-        console.log('Test transaction signature:', result.signature);
-      } else if (result.error) {
-        showToast(`Test transaction failed: ${result.error.message}`, 'error');
-        console.error('Test transaction error:', result.error);
+      // In Co-Pilot Mode, submit the voice text immediately after stopping
+      if (isCoPilotMode && voiceText) {
+        setInputValue(voiceText);
+        // Use a slight delay to allow the UI to update
+        setTimeout(() => {
+          handleChatSubmit(voiceText);
+        }, 300);
+      }
+    } else {
+      // If starting listening and we're in Co-Pilot Mode, provide a voice prompt
+      if (isCoPilotMode) {
+        speakText(
+          "I'm listening now. How can I assist with your financial data analysis?",
+          () => {
+            startListening();
+            setShowListeningIndicator(true);
+          }
+        );
       } else {
-        showToast('Test transaction failed or was cancelled', 'error');
+        startListening();
+        setShowListeningIndicator(true);
+      }
+    }
+  };
+  const handleLanguageChange = () =>
+    setLanguage((prev) => (prev === "en-US" ? "hi-IN" : "en-US"));
+
+  useEffect(() => {
+    if (chatContainerRef.current)
+      chatContainerRef.current.scrollTop =
+        chatContainerRef.current.scrollHeight;
+  }, [chatHistory, isThinking]);
+
+  // Update input value with voice text when using speech recognition
+  useEffect(() => {
+    if (voiceText) {
+      setInputValue(voiceText);
+
+      // In Co-Pilot Mode, if listening for follow-up, auto-submit the question
+      if (
+        isCoPilotMode &&
+        isListeningForFollowUp &&
+        voiceText.trim().length > 5
+      ) {
+        // Stop listening to prevent duplicate submissions
+        stopListening();
+        setShowListeningIndicator(false);
+        setIsListeningForFollowUp(false);
+
+        // Submit the question
+        handleChatSubmit(voiceText);
+      }
+    }
+  }, [voiceText, isCoPilotMode, isListeningForFollowUp]);
+
+  // Play welcome message when Co-Pilot Mode is toggled on
+  useEffect(() => {
+    if (isCoPilotMode) {
+      speakText(
+        "Voice assistant activated. I'll provide detailed spoken responses to help you analyze financial data."
+      );
+    }
+  }, [isCoPilotMode]);
+
+  const handleChatSubmit = async (text: string) => {
+    if (!text.trim()) return;
+    setView("chat");
+    setChatHistory((prev) => [...prev, { id: Date.now(), type: "user", text }]);
+    setInputValue("");
+    setIsThinking(true);
+
+    try {
+      const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+      if (API_KEY) {
+        try {
+          const genAI = new GoogleGenerativeAI(API_KEY);
+          const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+          const prompt = `You are an AI assistant for CyFuture AI, a financial analysis tool. Your knowledge base is general financial data. Based on this data, answer the user's question. Be concise and helpful. Use Markdown for formatting (e.g., **bold** for emphasis, lists). User's question: "${text}"`;
+
+          const result = await model.generateContent(prompt);
+          const response = await result.response;
+          const aiResponseText = response.text();
+
+          const aiResponse = {
+            id: Date.now() + 1,
+            type: "ai",
+            text: aiResponseText,
+          };
+          setChatHistory((prev) => [...prev, aiResponse]);
+        } catch (error) {
+          console.error("Error calling Gemini API:", error);
+          const aiResponse = {
+            id: Date.now() + 1,
+            type: "ai",
+            text: "Sorry, I encountered an error while connecting to the AI service. The model may be overloaded. Please try again later.",
+          };
+          setChatHistory((prev) => [...prev, aiResponse]);
+        } finally {
+          setIsThinking(false);
+        }
+      } else {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        const aiResponse = {
+          id: Date.now() + 1,
+          type: "ai",
+          text: "I can provide detailed data for financial analysis. (Note: Gemini API key not configured. Please set up your VITE_GEMINI_API_KEY in the .env.local file).",
+        };
+        setChatHistory((prev) => [...prev, aiResponse]);
+        setIsThinking(false);
       }
     } catch (error) {
-      console.error('Test transaction error:', error);
-      showToast(`Test transaction failed: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+      console.error("Error processing request:", error);
+      // Add error message to chat history
+      const errorResponse = {
+        id: Date.now() + 1,
+        type: "ai",
+        component: (
+          <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+            <div className="flex items-center gap-2 mb-2">
+              <h3 className="font-semibold text-red-700">
+                Sorry, I encountered an error
+              </h3>
+            </div>
+            <p className="text-red-600">
+              I was unable to process your request. Please try again later or
+              rephrase your question.
+            </p>
+          </div>
+        ),
+      };
+      setChatHistory((prev) => [...prev, errorResponse]);
+    } finally {
+      setIsThinking(false);
     }
   };
-  
-  // Handle file selection
-  const handleFileSelect = async (file: File) => {
-    if (!file) return;
-    
-    setAppState('EXTRACTING');
 
-    
-    try {
-      // Read file and generate hash
-      const fileBuffer = await file.arrayBuffer();
-      const hash = await generateHash(new Uint8Array(fileBuffer));
-      setFileHash(hash);
-      
-      // Upload file to IPFS
-      showToast("Uploading file to IPFS...", 'info');
-      const ipfsHash = await uploadFile(file);
-      if (!ipfsHash) {
-        throw new Error("Failed to upload file to IPFS");
-      }
-      setIpfsFileHash(ipfsHash);
-      showToast(`File uploaded to IPFS: ${ipfsHash.slice(0, 10)}...`, 'success');
-      
-      // Extract details using AI
-      await handleExtractDetails(file);
-    } catch (error: unknown) {
-      setAppState('ERROR');
-      const errorMsg = error instanceof Error ? error.message : 'Failed to process the file';
-      setErrorMessage(errorMsg);
-      showToast(`Error: ${errorMsg}`, 'error');
-    }
+  const iconMap: { [key: string]: React.ElementType } = {
+    TrendingUp,
+    ArrowDown,
+    ArrowUp,
+    User,
   };
-  
-  // Extract details from invoice image using AI
-  const handleExtractDetails = async (file: File) => {
-    try {
-      // Generate AI model
-      const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-      
-      // Prepare the image for model input
-      const imageParts = [await fileToGenerativePart(file)];
-      
-      // Prompt with instructions to extract data
-      const prompt = `
-        Extract the following information from this invoice image:
-        - invoice_number
-        - invoice_date
-        - total_amount (just the number)
-        - vendor_name
-        - vendor_gstin (if available)
-        - total_tax (if available)
-        
-        Return ONLY a valid JSON object with these fields, no other text.
-      `;
-      
-      // Generate content from the model
-      const result = await model.generateContent([prompt, ...imageParts]);
-      const response = await result.response;
-      const text = response.text();
-      
-      // Convert response to JSON
-      let jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) throw new Error("No valid JSON in response");
-      
-      const data = JSON.parse(jsonMatch[0]) as ExtractedData;
-      
-      // Hash the extracted data
-      const dataStr = JSON.stringify(data);
-      const encoder = new TextEncoder();
-      const dataBuffer = encoder.encode(dataStr);
-      // Cast to BufferSource to fix TypeScript error
-      const hash = await generateHash(dataBuffer as BufferSource);
-      
-      // Upload extracted data to IPFS
-      showToast("Uploading extracted data to IPFS...", 'info');
-      const ipfsDataHash = await uploadJson(data);
-      if (!ipfsDataHash) {
-        throw new Error("Failed to upload extracted data to IPFS");
-      }
-      setIpfsDataHash(ipfsDataHash);
-      showToast(`Data uploaded to IPFS: ${ipfsDataHash.slice(0, 10)}...`, 'success');
-      
-      // Update state with extracted data
-      setExtractedData(data);
-      setDataHash(hash);
-      setAppState('PREVIEW');
-    } catch (error: unknown) {
-      setAppState('ERROR');
-      const errorMsg = error instanceof Error ? error.message : 'AI extraction failed';
-      setErrorMessage(`AI extraction failed: ${errorMsg}`);
-      showToast("Failed to extract data from image", 'error');
-    }
+
+  const stats = useMemo(
+    () => [
+      {
+        title: "Total Revenue",
+        value: 660000,
+        icon: iconMap["TrendingUp"],
+        iconColor: "text-green-500",
+        change: "+5.2%",
+      },
+      {
+        title: "Total Expenses",
+        value: 150000,
+        icon: iconMap["ArrowDown"],
+        iconColor: "text-red-500",
+        change: "+2.1%",
+      },
+      {
+        title: "Net Profit",
+        value: 510000,
+        icon: iconMap["ArrowUp"],
+        iconColor: "text-green-500",
+        change: "+6.8%",
+      },
+      {
+        title: "New Customers",
+        value: 3461,
+        icon: iconMap["User"],
+        iconColor: "text-sky-500",
+        change: "+0.5%",
+      },
+    ],
+    []
+  );
+
+  const commonCommandBarProps = {
+    inputValue,
+    onInputChange: (e: React.ChangeEvent<HTMLInputElement>) =>
+      setInputValue(e.target.value),
+    onSubmit: () => handleChatSubmit(inputValue),
+    isListening,
+    onMicClick: handleMicClick,
+    hasSpeechSupport: hasRecognitionSupport,
+    language,
+    onLanguageChange: handleLanguageChange,
+    activeYear: activeYear,
+    onYearChange: setActiveYear,
+    isCoPilotMode,
+    onCoPilotModeChange: setIsCoPilotMode,
+    showListeningIndicator,
+    isListeningForFollowUp,
   };
-  
-  // Secure the data on blockchain  
-  const handleSecureOnBlockchain = async () => {
-    try {
-      setAppState('SECURING');
-      
-      // Create data to store on blockchain
-      const dataStr = JSON.stringify({
-        fileHash,
-        dataHash,
-        ipfsFileHash,
-        ipfsDataHash,
-        invoiceNumber: extractedData?.invoice_number,  
-        date: new Date().toISOString()
-      });
-      
-      // Send transaction to Solana using earth-credits-hub-32 interface
-      const result = await sendTransaction(dataStr);
-      if (result.signature) {
-        setTxSignature(result.signature);
-        setAppState('SUCCESS');
-        showToast("Invoice data secured on blockchain!", 'success');
-      } else {
-        throw new Error(result.error?.message || "Failed to get transaction signature");
-      }
-    } catch (error: unknown) {
-      setAppState('ERROR');
-      const errorMsg = error instanceof Error ? error.message : 'Transaction failed';
-      setErrorMessage(`Transaction failed: ${errorMsg}`);
-      showToast("Failed to secure data on blockchain", 'error');
-    }
-  };
-  
-  // --- Statistics Values (Mock Data) ---
-  const stats = [
-    { 
-      label: 'Monthly Spending', 
-      value: extractedData ? parseFloat(extractedData.total_amount || "0") : 0,
-      icon: BarChart2,
-      change: '+12.5%',
-      changeType: 'increase',
-      formatter: (value: number) => `₹${value.toLocaleString('en-IN')}`
+
+  const suggestedPrompts = [
+    {
+      title: "Get Revenue Details",
+      text: "Show the revenue for the last quarter",
+      description: "Fetch a detailed visual report for revenue.",
     },
-    { 
-      label: 'Tax Paid', 
-      value: extractedData ? parseFloat(extractedData.total_tax || "0") : 0,
-      icon: DollarSign,
-      change: '+5.2%',
-      changeType: 'increase',
-      formatter: (value: number) => `₹${value.toLocaleString('en-IN')}`
+    {
+      title: "List Top Expenses",
+      text: "List all top expenses in the last month",
+      description: "Filter and view expenses by category and state.",
+    },
+    {
+      title: "Compare Two Quarters",
+      text: "Compare revenue in Q1 and Q2 over the last 5 years.",
+      description: "Analyze historical trends between two quarters.",
+    },
+    {
+      title: "Predict Future Trends",
+      text: "Forecast the revenue for the next 6 months",
+      description: "Use predictive analytics to see future possibilities.",
+    },
+    {
+      title: "Get AI Recommendations",
+      text: "What can we do to reduce expenses in marketing?",
+      description: "Receive actionable advice based on current data.",
     },
   ];
-  
-  return (
-    <div className="min-h-screen bg-slate-50 bg-gradient-to-br from-slate-50 to-slate-100">
-      {/* Top Navigation Bar */}
-      <div className="bg-white shadow-sm border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center gap-2">
-              <ShieldCheck className="h-7 w-7 text-blue-600" />
-              <span className="text-xl font-semibold text-slate-800">AI Accountant</span>
-            </div>
-            
-            <div className="flex items-center gap-4">
-              <div className="relative">
-                <Input
-                  type="text"
-                  placeholder="Search invoices..."
-                  className="w-64 pr-8 pl-10 py-2 text-sm"
-                />
-                <Search className="h-4 w-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              </div>
-              
-              <div className="h-6 w-[1px] bg-slate-200"></div>
-              
-              <Button
-                onClick={handleTestTransaction}
-                disabled={isSending}
-                variant="outline"
-                size="sm"
-                className="flex items-center gap-2"
+
+  const renderDashboard = () => (
+    <div
+      className={`container mx-auto px-4 pt-8 pb-24 ${
+        embedded ? "mt-0" : "mt-10"
+      }`}
+    >
+      {!embedded && (
+        <div className="absolute top-8 right-8">
+          {/* <NotificationBell /> */}
+        </div>
+      )}
+      <div className="relative text-center max-w-4xl mx-auto">
+        {!embedded && (
+          <div className="absolute top-0 right-0 -mr-8 mt-4 w-32 h-32 bg-sky-400/30 rounded-full blur-3xl animate-pulse"></div>
+        )}
+        <h1
+          className={`font-bold text-slate-800 ${
+            embedded ? "text-3xl" : "text-5xl md:text-7xl"
+          }`}
+        >
+          CyFuture AI Assistant
+        </h1>
+        <p className="text-xl text-slate-600 max-w-2xl mt-4 mx-auto">
+          Your intelligent command center for India's financial data.
+        </p>
+      </div>
+      <div className="mt-12">
+        <INGRESCommandBar
+          {...commonCommandBarProps}
+          onFileSelect={handleFakeMapAnalysis}
+        />
+      </div>
+      <motion.div
+        initial="hidden"
+        animate="visible"
+        variants={{ visible: { transition: { staggerChildren: 0.1 } } }}
+        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mt-12 max-w-6xl mx-auto"
+      >
+        {stats.map((stat) => (
+          <motion.div
+            key={stat.title}
+            variants={{
+              hidden: { opacity: 0, y: 20 },
+              visible: { opacity: 1, y: 0 },
+            }}
+          >
+            <MemoizedStatCard stat={stat} />
+          </motion.div>
+        ))}
+      </motion.div>
+    </div>
+  );
+
+  // --- Located inside the INGRESAssistant component ---
+  const renderChatView = () => (
+    <div
+      className={`flex items-center justify-center min-h-screen p-4 ${
+        embedded ? "p-2" : "md:p-6"
+      }`}
+    >
+      {" "}
+      {/* CHANGED: Added more padding on larger screens */}
+      {/* CHANGED: Increased max-width and adjusted height for a bigger chat window */}
+      <Card
+        className={`w-full flex flex-col shadow-2xl rounded-2xl ${
+          embedded
+            ? "h-full max-w-none bg-slate-800/90 border-slate-700"
+            : "max-w-5xl h-[calc(100vh-1rem)] bg-white/60 backdrop-blur-xl border-white/30"
+        }`}
+      >
+        <CardHeader
+          className={`flex flex-row items-center justify-between ${
+            embedded
+              ? "border-slate-700 bg-slate-800/50"
+              : "border-slate-200/80"
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <Bot className="h-6 w-6 text-purple-600" />
+            <CardTitle className="text-xl">AI Data Analyst</CardTitle>
+            {/* Development button - only show in development mode */}
+          </div>
+          <div className="flex items-center gap-2">
+            {/* {!embedded && <NotificationBell />} */}
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setView("dashboard");
+                setChatHistory([]);
+              }}
+            >
+              <X className="h-4 w-4 mr-2" /> End Chat
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent
+          ref={chatContainerRef}
+          className={`flex-grow overflow-y-auto space-y-6 ${
+            embedded ? "p-3" : "p-6"
+          }`}
+        >
+          {" "}
+          {/* CHANGED: Increased padding and spacing */}
+          {chatHistory.length === 0 && (
+            <motion.div
+              variants={{ visible: { transition: { staggerChildren: 0.1 } } }}
+              initial="hidden"
+              animate="visible"
+              className="pt-4 pb-8 text-center"
+            >
+              <motion.h3
+                variants={{
+                  hidden: { opacity: 0, y: 20 },
+                  visible: { opacity: 1, y: 0 },
+                }}
+                className="text-lg font-semibold text-slate-700 mb-4"
               >
-                {isSending ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                    Testing...
-                  </>
-                ) : (
-                  <>
-                    <Zap className="h-4 w-4" />
-                    Test Transaction
-                  </>
-                )}
-              </Button>
-              
-              <WalletMultiButton />
-            </div>
-          </div>
+                Try one of these sample queries...
+              </motion.h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {suggestedPrompts.map((prompt, i) => (
+                  <motion.button
+                    key={i}
+                    variants={{
+                      hidden: { opacity: 0, y: 20 },
+                      visible: { opacity: 1, y: 0 },
+                    }}
+                    onClick={() => handleChatSubmit(prompt.text)}
+                    className={`p-4 rounded-lg text-left text-sm font-medium border shadow-sm hover:shadow-md ${
+                      embedded
+                        ? "bg-slate-700/50 text-slate-200 border-slate-600 hover:bg-slate-600/50"
+                        : "bg-white/60 text-slate-800 hover:bg-slate-100/80"
+                    }`}
+                  >
+                    <p className="font-semibold">{prompt.title}</p>
+                  </motion.button>
+                ))}
+              </div>
+            </motion.div>
+          )}
+          <AnimatePresence>
+            // --- Replace your old chat mapping logic with this new version ---
+            {chatHistory.map((msg, index) => {
+              const isLastMessage = index === chatHistory.length - 1;
+              // --- NEW: This line checks if the message contains a component (like our graph) ---
+              const isGraphMessage = !!msg.component;
+
+              return (
+                <motion.div
+                  key={msg.id}
+                  layout
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className={`flex items-start gap-4 ${
+                    msg.type === "user" ? "ml-auto justify-end" : "mr-auto"
+                  } w-full`} // The outer container is now full-width
+                >
+                  {msg.type === "ai" && (
+                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-sky-100 to-purple-100 flex items-center justify-center">
+                      <Bot className="w-5 h-5 text-sky-600" />
+                    </div>
+                  )}
+
+                  {/*
+              --- THIS IS THE CRUCIAL FIX ---
+              This div now applies a different width based on whether it's a graph or not.
+            */}
+                  <div className={isGraphMessage ? "w-full" : "max-w-2xl"}>
+                    {msg.type === "user" ? (
+                      <div className="bg-purple-500 text-white p-3 rounded-2xl rounded-br-lg shadow-sm">
+                        <p className="text-base">{msg.text}</p>
+                      </div>
+                    ) : msg.component ? (
+                      // If it's a graph component, render it directly without extra styling
+                      msg.component
+                    ) : (
+                      // If it's an AI text message, render it inside the styled bubble
+                      <div
+                        className={`p-4 rounded-2xl rounded-bl-lg border shadow-sm prose prose-base max-w-none ${
+                          embedded
+                            ? "bg-slate-700/50 text-slate-200 border-slate-600"
+                            : "bg-white text-slate-800"
+                        }`}
+                      >
+                        {isLastMessage ? (
+                          <AnimatedMarkdownMessage text={msg.text || ""} />
+                        ) : (
+                          <p>{msg.text}</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {msg.type === "user" && (
+                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center">
+                      <User className="w-5 h-5 text-slate-600" />
+                    </div>
+                  )}
+                </motion.div>
+              );
+            })}
+            {isThinking && <GeminiShimmerEffect />}
+          </AnimatePresence>
+        </CardContent>
+        <CardContent
+          className={`${
+            embedded
+              ? "border-slate-700 bg-slate-800/50"
+              : "border-slate-200/80"
+          } pt-4`}
+        >
+          <INGRESCommandBar
+            {...commonCommandBarProps}
+            onFileSelect={handleFakeMapAnalysis}
+          />
+        </CardContent>
+      </Card>
+    </div>
+  );
+
+  return (
+    <div
+      className={`min-h-screen text-slate-900 font-sans isolate ${
+        embedded ? "bg-slate-900" : "bg-slate-100"
+      }`}
+    >
+      {!embedded && (
+        <div className="absolute inset-0 -z-10 h-full w-full overflow-hidden">
+          <div className="absolute -top-1/4 left-0 h-[800px] w-[800px] bg-purple-200/30 rounded-full blur-3xl filter animate-blob"></div>
+          <div className="absolute -top-1/3 right-0 h-[800px] w-[800px] bg-sky-200/30 rounded-full filter animate-blob animation-delay-2000"></div>
         </div>
-      </div>
-      
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Left Column - Upload/Process */}
-          <div className="lg:col-span-2 space-y-6">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-xl">Invoice Processing</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* File Upload Section */}
-                  <div>
-                    {(appState === 'IDLE' || appState === 'ERROR') && (
-                      <FileDrop 
-                        onFileSelect={handleFileSelect}
-                        isProcessing={isSending || isUploading || appState === 'EXTRACTING' as any}
-                        appState={appState}
-                      />
-                    )}
-                    
-                    {appState === 'EXTRACTING' && <InvoiceSkeleton />}
-                    
-                    {(appState === 'PREVIEW' || appState === 'SECURING' || appState === 'SUCCESS') && extractedData && (
-                      <div className="bg-white/80 p-4 rounded-xl border border-slate-200/80 w-full max-w-md">
-                        <div className="flex justify-between items-start mb-4">
-                          <h3 className="text-lg font-semibold text-slate-800">Invoice Preview</h3>
-                          <Badge variant="outline" className="text-xs">
-                            {appState === 'PREVIEW' ? 'Ready to Secure' : 
-                             appState === 'SECURING' ? 'Securing...' : 'Secured'}
-                          </Badge>
-                        </div>
-                        
-                        <div className="space-y-4">
-                          <div className="flex justify-between items-center">
-                            <div>
-                              <p className="text-xs text-slate-500">Invoice Number</p>
-                              <p className="font-semibold">{extractedData?.invoice_number}</p>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-xs text-slate-500">Date</p>
-                              <p>{extractedData?.invoice_date}</p>
-                            </div>
-                          </div>
-                          
-                          <div>
-                            <p className="text-xs text-slate-500">Amount</p>
-                            <p className="text-xl font-bold text-slate-800">
-                              ₹{parseFloat(extractedData?.total_amount || "0").toLocaleString('en-IN')}
-                            </p>
-                          </div>
-                          
-                          {extractedData?.vendor_gstin && (
-                            <div>
-                              <p className="text-xs text-slate-500">GSTIN</p>
-                              <p className="font-mono">{extractedData.vendor_gstin}</p>
-                            </div>
-                          )}
-                        </div>
-                        
-                        {appState === 'PREVIEW' && (
-                          <Button 
-                            className="w-full mt-5"
-                            onClick={handleSecureOnBlockchain}
-                            disabled={isSending || isUploading}
-                          >
-                            <Wallet className="h-4 w-4 mr-2" />
-                            Secure on Blockchain
-                          </Button>
-                        )}
-                        
-                        {appState === 'SECURING' && (
-                          <div className="w-full mt-5 p-2 bg-slate-100 rounded-md flex items-center justify-center">
-                            <motion.div
-                              className="mr-2 h-4 w-4 border-2 border-slate-300 border-t-slate-600 rounded-full"
-                              animate={{ rotate: 360 }}
-                              transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                            />
-                            <span className="text-sm text-slate-600">Securing on Blockchain...</span>
-                          </div>
-                        )}
-                        
-                        {appState === 'SUCCESS' && (
-                          <div className="w-full mt-5 p-2 bg-green-50 rounded-md flex items-center justify-center">
-                            <CheckCircle className="h-4 w-4 mr-2 text-green-600" />
-                            <span className="text-sm text-green-600">Successfully Secured</span>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  
-                  {/* Extracted Data Section */}
-                  <div>
-                    {appState === 'SUCCESS' && extractedData && (
-                      <ExtractedDataTable 
-                        data={extractedData}
-                        fileHash={fileHash}
-                        dataHash={dataHash}
-                        txSignature={txSignature}
-                      />
-                    )}
-                    
-                    {appState === 'ERROR' && (
-                      <div className="bg-red-50 p-5 rounded-xl border border-red-100 text-red-700">
-                        <div className="flex items-start gap-3 mb-3">
-                          <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
-                          <div>
-                            <h3 className="font-semibold mb-1">Error Processing Invoice</h3>
-                            <p className="text-sm">{errorMessage}</p>
-                          </div>
-                        </div>
-                        <p className="text-xs text-red-600 mt-3">
-                          Try uploading a different invoice image or check your wallet connection.
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            
-            {appState === 'SUCCESS' && (
-              <Card className="overflow-hidden">
-                <CardContent className="p-0">
-                  <div className="p-6 pb-0">
-                    <h3 className="text-xl font-semibold text-slate-800 mb-1">Transaction Successful</h3>
-                    <p className="text-sm text-slate-500">
-                      Your invoice data has been securely recorded on the Solana blockchain
-                    </p>
-                  </div>
-                  
-                  <div className="p-6">
-                    <div className="rounded-md bg-green-50 p-4 border border-green-100">
-                      <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center">
-                          <CheckCircle className="h-5 w-5 text-green-600" />
-                        </div>
-                        <div>
-                          <p className="font-medium">Invoice #{extractedData?.invoice_number} Secured</p>
-                          <p className="text-sm text-slate-600 mt-0.5">
-                            <a 
-                              href={`https://explorer.solana.com/tx/${txSignature}?cluster=devnet`}
-                              target="_blank"
-                              rel="noopener noreferrer" 
-                              className="text-blue-600 hover:underline inline-flex items-center"
-                            >
-                              View on Solana Explorer
-                              <FileDown className="h-3 w-3 ml-1" />
-                            </a>
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    {/* IPFS Information */}
-                    <div className="mt-4 space-y-3">
-                      <h4 className="text-sm font-medium text-slate-700">IPFS Storage Details</h4>
-                      
-                      <div className="rounded-md bg-blue-50 p-3 border border-blue-100">
-                        <div className="flex items-start gap-2">
-                          <FileText className="h-4 w-4 text-blue-600 mt-0.5" />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-blue-900">Original File</p>
-                            <p className="text-xs text-blue-700 font-mono break-all">
-                              <a 
-                                href={`https://gateway.pinata.cloud/ipfs/${ipfsFileHash}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="hover:underline"
-                              >
-                                {ipfsFileHash}
-                              </a>
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div className="rounded-md bg-purple-50 p-3 border border-purple-100">
-                        <div className="flex items-start gap-2">
-                          <Bot className="h-4 w-4 text-purple-600 mt-0.5" />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-purple-900">Extracted Data</p>
-                            <p className="text-xs text-purple-700 font-mono break-all">
-                              <a 
-                                href={`https://gateway.pinata.cloud/ipfs/${ipfsDataHash}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="hover:underline"
-                              >
-                                {ipfsDataHash}
-                              </a>
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="border-t border-slate-100 p-6">
-                    <Button 
-                      variant="outline" 
-                      className="w-full"
-                      onClick={() => {
-                        setAppState('IDLE');
-                        setExtractedData(null);
-                        setFileHash('');
-                        setDataHash('');
-                        setTxSignature('');
-                      }}
-                    >
-                      Process Another Invoice
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-          
-          {/* Right Column - Stats */}
-          <div className="space-y-6">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-xl">Monthly Summary</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Stats Grid */}
-                <div className="grid grid-cols-1 gap-4">
-                  {stats.map((stat, index) => (
-                    <div key={index} className="bg-white rounded-lg border border-slate-200 p-4">
-                      <div className="flex justify-between items-start mb-3">
-                        <div className="h-9 w-9 rounded-md bg-blue-50 flex items-center justify-center">
-                          <stat.icon className="h-5 w-5 text-blue-600" />
-                        </div>
-                        <Badge variant={stat.changeType === 'increase' ? 'default' : 'destructive'} className="text-xs">
-                          {stat.change}
-                        </Badge>
-                      </div>
-                      
-                      <p className="text-sm text-slate-500">{stat.label}</p>
-                      <p className="text-2xl font-bold text-slate-800 mt-1">
-                        {stat.formatter(stat.value)}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-                
-                {/* Graph */}
-                <div className="mt-6">
-                  <div className="flex justify-between items-center mb-3">
-                    <h4 className="text-sm font-medium text-slate-700">Monthly Spending</h4>
-                    <Badge variant="outline" className="text-xs">Last 6 months</Badge>
-                  </div>
-                  
-                  <div className="relative h-[180px] overflow-hidden rounded-md border border-slate-200">
-                    <img 
-                      src={graphMonthly} 
-                      alt="Monthly spending graph" 
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                </div>
-                
-                {/* Recent Activity */}
-                <div className="mt-6">
-                  <h4 className="text-sm font-medium text-slate-700 mb-3">Recent Activity</h4>
-                  
-                  <div className="space-y-3">
-                    {['Invoice #INV-2023', 'Tax Payment', 'Vendor Payment'].map((item, i) => (
-                      <div key={i} className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-md">
-                        <div className={`h-8 w-8 rounded-full flex items-center justify-center ${
-                          i === 0 ? 'bg-blue-100 text-blue-600' : 
-                          i === 1 ? 'bg-green-100 text-green-600' : 
-                          'bg-amber-100 text-amber-600'
-                        }`}>
-                          {i === 0 ? <FileText className="h-4 w-4" /> : 
-                           i === 1 ? <DollarSign className="h-4 w-4" /> : 
-                           <ShoppingCart className="h-4 w-4" />}
-                        </div>
-                        
-                        <div>
-                          <p className="text-sm font-medium text-slate-700">{item}</p>
-                          <p className="text-xs text-slate-500">
-                            {i === 0 ? '3 hours ago' : i === 1 ? 'Yesterday' : '3 days ago'}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      </div>
-      
-      {/* Toast Notification */}
+      )}
       <AnimatePresence>
-        {toastInfo.visible && (
+        {toast.visible && (
           <Toast
-            message={toastInfo.message}
-            type={toastInfo.type}
-            onDismiss={() => setToastInfo({ ...toastInfo, visible: false })}
+            message={toast.message}
+            type={toast.type}
+            onDismiss={() => setToast({ ...toast, visible: false })}
           />
         )}
+      </AnimatePresence>
+
+      {/* Listening Indicator */}
+      <AnimatePresence>
+        {showListeningIndicator && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            transition={{ duration: 0.2 }}
+          >
+            <ListeningIndicator />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={view}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+        >
+          {view === "dashboard" ? renderDashboard() : renderChatView()}
+        </motion.div>
       </AnimatePresence>
     </div>
   );
 };
 
-
+export default AIAccountant;

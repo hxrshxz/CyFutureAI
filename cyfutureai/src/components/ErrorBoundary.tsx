@@ -1,7 +1,7 @@
 // src/components/ErrorBoundary.tsx
-import React, { Component } from 'react';
-import type { ReactNode } from 'react';
-import { AlertCircle, RefreshCw } from 'lucide-react';
+import React, { Component } from "react";
+import type { ReactNode } from "react";
+import { AlertCircle, RefreshCw } from "lucide-react";
 
 interface Props {
   children: ReactNode;
@@ -23,7 +23,7 @@ class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('React Error Boundary caught an error:', error, errorInfo);
+    console.error("React Error Boundary caught an error:", error, errorInfo);
   }
 
   render() {
@@ -34,12 +34,15 @@ class ErrorBoundary extends Component<Props, State> {
             <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
               <AlertCircle className="h-8 w-8 text-red-400" />
             </div>
-            
-            <h2 className="text-xl font-bold text-white mb-2">Something went wrong</h2>
+
+            <h2 className="text-xl font-bold text-white mb-2">
+              Something went wrong
+            </h2>
             <p className="text-slate-400 mb-6">
-              We encountered an unexpected error. Please try refreshing the page.
+              We encountered an unexpected error. Please try refreshing the
+              page.
             </p>
-            
+
             <div className="space-y-3">
               <button
                 onClick={() => window.location.reload()}
@@ -48,7 +51,7 @@ class ErrorBoundary extends Component<Props, State> {
                 <RefreshCw className="h-4 w-4" />
                 Refresh Page
               </button>
-              
+
               <button
                 onClick={() => this.setState({ hasError: false })}
                 className="w-full border border-purple-500/50 text-purple-300 hover:bg-purple-500/10 px-4 py-2 rounded-lg font-medium transition-all duration-200"
@@ -56,8 +59,8 @@ class ErrorBoundary extends Component<Props, State> {
                 Try Again
               </button>
             </div>
-            
-            {process.env.NODE_ENV === 'development' && this.state.error && (
+
+            {process.env.NODE_ENV === "development" && this.state.error && (
               <details className="mt-6 text-left">
                 <summary className="text-sm text-slate-500 cursor-pointer hover:text-slate-400">
                   Technical Details

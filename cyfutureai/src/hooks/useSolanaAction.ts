@@ -1,9 +1,6 @@
 import { useState, useCallback } from "react";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
-import {
-  Transaction,
-  LAMPORTS_PER_SOL,
-} from "@solana/web3.js";
+import { Transaction, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { createMemoInstruction } from "@solana/spl-memo";
 
 // Define the structure for the hook's return value
@@ -78,13 +75,17 @@ export const useSolanaAction = (): SolanaAction => {
         return { signature, error: null };
       } catch (err) {
         console.error("Solana transaction error:", err);
-        
+
         // Handle specific wallet errors
         let errorMessage = "Transaction failed";
         const errorStr = (err as Error).message;
-        
-        if (errorStr.includes("metamask/solana-wallet-snap") || errorStr.includes("Snap crashed")) {
-          errorMessage = "MetaMask Solana snap crashed. Please try using Phantom wallet instead, or refresh the page and reconnect.";
+
+        if (
+          errorStr.includes("metamask/solana-wallet-snap") ||
+          errorStr.includes("Snap crashed")
+        ) {
+          errorMessage =
+            "MetaMask Solana snap crashed. Please try using Phantom wallet instead, or refresh the page and reconnect.";
         } else if (errorStr.includes("User rejected")) {
           errorMessage = "Transaction was cancelled by user";
         } else if (errorStr.includes("Insufficient")) {
@@ -92,7 +93,7 @@ export const useSolanaAction = (): SolanaAction => {
         } else if (errorStr.includes("Network")) {
           errorMessage = "Network connection issue. Please try again.";
         }
-        
+
         const enhancedError = new Error(errorMessage);
         return { signature: null, error: enhancedError };
       } finally {
@@ -133,11 +134,11 @@ export const useSolanaAction = (): SolanaAction => {
       return { signature, error: null };
     } catch (err) {
       console.error("Airdrop error:", err);
-      
+
       // Handle specific airdrop errors
       let errorMessage = "Airdrop failed";
       const errorStr = (err as Error).message;
-      
+
       if (errorStr.includes("rate limit") || errorStr.includes("429")) {
         errorMessage = "Rate limited. Please try again in a few minutes.";
       } else if (errorStr.includes("insufficient funds")) {
@@ -145,7 +146,7 @@ export const useSolanaAction = (): SolanaAction => {
       } else if (errorStr.includes("Network")) {
         errorMessage = "Network issue. Check connection and try again.";
       }
-      
+
       const enhancedError = new Error(errorMessage);
       return { signature: null, error: enhancedError };
     } finally {
